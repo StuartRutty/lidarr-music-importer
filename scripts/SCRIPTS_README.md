@@ -19,6 +19,8 @@ Samples and examples
 - See `examples/sample_spotify.csv` (mock Spotify export columns)
 - See `examples/sample_text_list.txt` (lines in the format `Artist - Album`)
 
+Note: For exporting Spotify playlists to CSV we recommend Exportify — the web UI is at https://exportify.app/ and the project repo is https://github.com/watsonbox/exportify.
+
 Quick usage (examples)
 
 1. Parse an input file (auto-detect format):
