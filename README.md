@@ -156,16 +156,7 @@ Notes
 Contributing & CI
 - Add tests for new functionality. A basic CI workflow that runs `pytest` is recommended before pushing.
 
-Contact
-- For questions about this repo, open an issue or edit docs under `docs/`.
 
-    result = new_function(input_data)
-    
-    # Assert
-    assert result == expected_output
-```
-
----
 
 ## 📝 Requirements
 
@@ -174,22 +165,6 @@ Contact
 - Required packages: `requests`, `tqdm` (install with `pip install -r requirements.txt`)
 - Network access to Lidarr instance
 - CSV data with artist/album pairs
-
-## 🤝 Contributing
-
-This project is designed for personal use but welcome improvements:
-
-1. **Bug Reports**: Include error logs and configuration details
-2. **Feature Requests**: Describe use case and expected behavior
-3. **Code Contributions**: Follow existing code style and add tests
-
-## 📄 License
-
-This project is released under the MIT License. See individual script headers for details.
-
-## 🙏 Acknowledgments
-
-- **Lidarr Team**: For the excellent music management software
 - **MusicBrainz**: For comprehensive music metadata
 - **Spotify**: For music discovery and export capabilities
 
