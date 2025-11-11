@@ -1,0 +1,47 @@
+# Data Directory
+
+This directory contains processed data files for the Lidarr Music Importer.
+
+## Contents
+
+- `filtered_artist_album_pairs.csv` - Processed album data ready for import
+- Other CSV files generated during processing
+
+## Privacy Note
+
+Data files in this directory may contain personal information (your music preferences) and are excluded from version control by default.
+
+## File Formats
+
+All CSV files should follow this format:
+```csv
+artist,album,status
+"Artist Name","Album Title","status_code"
+```
+
+## Status Codes
+
+### Successful
+- `completed` - Artist added and album successfully monitored
+- `album_monitored` - Existing artist, album successfully monitored
+
+### Temporary Failures (Retryable)
+- `refresh_triggered` - Album monitoring failed, metadata refresh triggered
+- `failed:connection_error` - Network/connection issues
+- `failed:timeout` - Request timeout
+- `failed:api_error` - General API error
+- `failed:unexpected_error` - Other unexpected errors
+
+### Permanent Failures (Will be skipped)
+- `failed:no_lookup_results` - Artist not found in any metadata sources
+- `failed:artist_not_found` - Artist not found (404 from metadata APIs)
+- `failed:invalid_data` - Artist data is invalid/malformed
+- `failed:api_auth` - API authentication/authorization issues
+- `failed:already_exists` - Artist already exists (race condition)
+
+### Other
+- `dry_run` - Processed in dry-run mode (testing only)
+
+## Smart Retry Logic
+
+Use `--skip-completed` to automatically skip successful items AND permanent failures, retrying only temporary failures that might succeed on subsequent runs.

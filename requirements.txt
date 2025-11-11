@@ -1,0 +1,20 @@
+# Lidarr Music Importer Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+requests>=2.25.0          # HTTP library for API calls
+tqdm>=4.50.0              # Progress bars for batch processing
+rapidfuzz>=3.0.0          # Fast fuzzy string matching for album/artist names
+
+# Note: Script includes custom MusicBrainz API implementation, 
+# no separate musicbrainzngs package needed
+
+# Development and testing dependencies
+pytest>=7.0.0             # Testing framework
+pytest-cov>=4.0.0         # Coverage reporting
+responses>=0.23.0         # HTTP mocking for tests
+pytest-mock>=3.10.0       # Mocking utilities
+
+# Optional code quality tools
+# black>=21.0.0           # Code formatting
+# flake8>=3.8.0           # Code linting
