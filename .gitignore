@@ -13,7 +13,14 @@ venv/
 .venv/
 ENV/
 env/
-Scripts/
+# Don't ignore the repository's top-level `scripts/` directory. Ignore the
+# virtualenv Scripts directory specifically inside a venv folder instead.
+venv/Scripts/
+
+# Ignore accidental generated executables in the scripts/ folder
+scripts/*.exe
+# Ignore large data file if present in scripts/
+scripts/albums.csv
 
 # Test and coverage
 .pytest_cache/
