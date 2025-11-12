@@ -124,8 +124,8 @@ class UniversalParser:
     def parse_spotify_csv(
         self,
         file_path: str,
-        min_artist_songs: int = 3,
-        min_album_songs: int = 2,
+        min_artist_songs: int = 0,
+        min_album_songs: int = 0,
         artist_filter: Optional[str] = None,
         album_filter: Optional[str] = None,
         max_items: Optional[int] = None,
@@ -394,9 +394,23 @@ class UniversalParser:
                             entry.risk_reason = self._append_risk_reason(entry.risk_reason, f"Low MB match score: {score}")
                 else:
                     logging.info(f"❌ Album '{entry.album}' → No match found")
-                    # we'll compute overall counters after loop; mark failures where neither artist nor release were found
+                    # If we didn't capture an artist MBID earlier for some reason,
+                    # try an artist-only search as a fallback so we at least populate
+                    # mb_artist_id on the CSV even when no release-group was found.
                     if not entry.mb_artist_id:
-                        self.stats['mb_failed'] += 1
+                        try:
+                            mb_artist_fallback = self.mb_client.search_artists(entry.artist, limit=1)
+                            fb_list = mb_artist_fallback.get('artist-list', [])
+                            if fb_list:
+                                entry.mb_artist_id = fb_list[0].get('id', '')
+                                logging.info(f"ℹ️ Artist-only fallback: '{entry.artist}' → ID: {entry.mb_artist_id}")
+                            else:
+                                self.stats['mb_failed'] += 1
+                        except Exception:
+                            self.stats['mb_failed'] += 1
+                    else:
+                        # Artist was found but no release matched; count as artist-only match
+                        self.stats['mb_artist_matches'] = self.stats.get('mb_artist_matches', 0) + 1
             except Exception as e:
                 logging.error(f"❌ Error processing '{entry.artist}' - '{entry.album}': {e}")
                 self.stats['mb_failed'] += 1
@@ -428,8 +442,8 @@ class UniversalParser:
         if format_type == 'spotify_csv':
             self.parse_spotify_csv(
                 file_path,
-                min_artist_songs=kwargs.get('min_artist_songs', 3),
-                min_album_songs=kwargs.get('min_album_songs', 2),
+                min_artist_songs=kwargs.get('min_artist_songs', 0),
+                min_album_songs=kwargs.get('min_album_songs', 0),
                 artist_filter=kwargs.get('artist'),
                 album_filter=kwargs.get('album'),
                 max_items=kwargs.get('max_items')
@@ -559,8 +573,8 @@ QUICK ALIAS (optional):
     parser.add_argument('--dry-run', action='store_true', help='Parse and show stats without writing output')
     parser.add_argument('--fuzzy-threshold', type=int, default=85, help='Fuzzy matching threshold 0-100 (default: 85)')
     parser.add_argument('--no-normalize', action='store_true', help='Skip normalization (keep original formatting)')
-    parser.add_argument('--min-artist-songs', type=int, default=3, help='For Spotify: minimum songs per artist (default: 3)')
-    parser.add_argument('--min-album-songs', type=int, default=2, help='For Spotify: minimum songs per album (default: 2)')
+    parser.add_argument('--min-artist-songs', type=int, default=0, help='For Spotify: minimum songs per artist (default: 0 — no filtering)')
+    parser.add_argument('--min-album-songs', type=int, default=0, help='For Spotify: minimum songs per album (default: 0 — no filtering)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose debug logging')
     parser.add_argument('--max-items', type=int, help='Limit number of items to process (useful for debugging)')
     parser.add_argument('--include-risk-info', action='store_true', help='Include matching_risk and risk_reason columns in output CSV')

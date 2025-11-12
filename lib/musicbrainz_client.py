@@ -15,6 +15,7 @@ MusicBrainz Terms of Service:
 
 import time
 import logging
+import re
 import xml.etree.ElementTree as ET
 from typing import Optional, Dict, Any, List
 import requests
@@ -136,50 +137,140 @@ class MusicBrainzClient:
         """
         # Strip brackets from artist name for search query
         search_artist = artist.strip('[]') if artist.startswith('[') and artist.endswith(']') else artist
-        
-        params = {
-            'query': f'artist:{search_artist}',
-            'limit': str(limit)
-        }
-        
-        root = self._make_request('artist', params)
-        if root is None:
-            return {"artist-list": []}
-        
-        # Parse XML response
+
+        # Try both quoted and unquoted artist queries. Collect results from
+        # both (if available) and prefer candidates returned from the quoted
+        # query. This avoids transient network failures where the quoted
+        # query might temporarily fail and the unquoted one returns a wrong
+        # candidate.
+        queries = [(f'artist:"{search_artist}"', True), (f'artist:{search_artist}', False)]
         ns = {'mb': 'http://musicbrainz.org/ns/mmd-2.0#'}
-        artists = root.findall('.//mb:artist', ns)
-        
-        artist_list = []
-        for artist_elem in artists:
-            name_elem = artist_elem.find('./mb:name', ns)
-            name = name_elem.text if name_elem is not None else ''
-            score = artist_elem.get('ext:score', '100')
-            
-            # Calculate similarity score between search term and result name
-            # Use the search term (without brackets if they were stripped) for comparison
-            search_term = search_artist.lower()
-            result_name = name.lower()
-            similarity = fuzz.ratio(search_term, result_name)
-            
-            artist_list.append({
-                'id': artist_elem.get('id', ''),
-                'name': name,
-                'ext:score': score,
-                'similarity': similarity
-            })
-        
-        # Filter results to only include high similarity matches
-        filtered_list = [a for a in artist_list if a['similarity'] >= 70]
-        
-        # Sort by similarity first, then by MB score
-        filtered_list.sort(key=lambda x: (x['similarity'], int(x['ext:score'])), reverse=True)
-        
-        # Remove the similarity key from output
+
+        collected: Dict[str, Dict[str, Any]] = {}
+        quoted_failed = False
+        search_term = (search_artist or '').lower()
+
+        for q, is_quoted in queries:
+            params = {'query': q, 'limit': str(limit)}
+            root = self._make_request('artist', params)
+            if root is None:
+                # network issue or rate-limited; try next query
+                if is_quoted:
+                    quoted_failed = True
+                continue
+            artists = root.findall('.//mb:artist', ns)
+            for artist_elem in artists:
+                aid = artist_elem.get('id', '')
+                name_elem = artist_elem.find('./mb:name', ns)
+                name = name_elem.text if name_elem is not None else ''
+                score = artist_elem.get('ext:score', '100')
+                try:
+                    similarity = fuzz.ratio(search_term, (name or '').lower())
+                except Exception:
+                    similarity = 0
+
+                # If we've seen this artist from the other query, merge info and
+                # prefer quoted=True if either source was quoted.
+                if aid in collected:
+                    existing = collected[aid]
+                    existing['similarity'] = max(existing.get('similarity', 0), similarity)
+                    existing['is_quoted'] = existing.get('is_quoted', False) or is_quoted
+                    # keep the highest ext:score as string
+                    try:
+                        existing['ext:score'] = str(max(int(existing.get('ext:score', '0') or 0), int(score or 0)))
+                    except Exception:
+                        existing['ext:score'] = score
+                else:
+                    collected[aid] = {
+                        'id': aid,
+                        'name': name,
+                        'ext:score': score,
+                        'similarity': similarity,
+                        'is_quoted': is_quoted,
+                    }
+
+        if not collected:
+            return {"artist-list": []}
+
+        # If we only collected unquoted results and the quoted query failed
+        # earlier (transient network error), try the quoted query one more time
+        # to give preference to quoted matches.
+        has_quoted = any(a.get('is_quoted') for a in collected.values())
+        if not has_quoted and quoted_failed:
+            q = f'artist:"{search_artist}"'
+            params = {'query': q, 'limit': str(limit)}
+            root = self._make_request('artist', params)
+            if root is not None:
+                artists = root.findall('.//mb:artist', ns)
+                for artist_elem in artists:
+                    aid = artist_elem.get('id', '')
+                    name_elem = artist_elem.find('./mb:name', ns)
+                    name = name_elem.text if name_elem is not None else ''
+                    score = artist_elem.get('ext:score', '100')
+                    try:
+                        similarity = fuzz.ratio(search_term, (name or '').lower())
+                    except Exception:
+                        similarity = 0
+
+                    if aid in collected:
+                        existing = collected[aid]
+                        existing['similarity'] = max(existing.get('similarity', 0), similarity)
+                        existing['is_quoted'] = True
+                        try:
+                            existing['ext:score'] = str(max(int(existing.get('ext:score', '0') or 0), int(score or 0)))
+                        except Exception:
+                            existing['ext:score'] = score
+                    else:
+                        collected[aid] = {
+                            'id': aid,
+                            'name': name,
+                            'ext:score': score,
+                            'similarity': similarity,
+                            'is_quoted': True,
+                        }
+
+        artist_list: List[Dict[str, Any]] = list(collected.values())
+
+        # Debug: show raw candidates
+        logger.debug(f"Raw artist candidates for '{search_artist}':")
+        for a in artist_list:
+            n = (a.get('name') or '')
+            try:
+                n_norm = normalize_artist_name(n)
+            except Exception:
+                n_norm = n.lower()
+            logger.debug(f"  - id={a.get('id')} name='{a.get('name')}' norm='{n_norm}' sim={a.get('similarity')} score={a.get('ext:score')}")
+
+        # Filter results to only include reasonably similar matches.
+        MIN_SIMILARITY = 70
+        filtered_list = [a for a in artist_list if a['similarity'] >= MIN_SIMILARITY]
+        if not filtered_list and artist_list:
+            RELAXED_SIM = 60
+            filtered_list = [a for a in artist_list if a['similarity'] >= RELAXED_SIM]
+
+        # Prefer results that preserve leading qualifiers when the search term has one
+        search_tokens = (search_artist or '').lower().split()
+        prefix_candidates = {'dj', 'the', 'mc'}
+        search_prefix = search_tokens[0] if search_tokens and search_tokens[0] in prefix_candidates else None
+
+        def _sort_key(x: Dict[str, Any]):
+            name_val = x.get('name') or ''
+            try:
+                norm_name = normalize_artist_name(name_val)
+            except Exception:
+                norm_name = name_val.lower()
+            has_prefix = 1 if (search_prefix and norm_name.startswith(search_prefix)) else 0
+            prefix_boost = 1000 if has_prefix else 0
+            quoted_boost = 2000 if x.get('is_quoted') else 0
+            # quoted_boost is highest priority, then prefix_boost, then similarity, then ext score
+            return (quoted_boost + prefix_boost + int(x.get('similarity') or 0), int(x.get('ext:score') or 0))
+
+        filtered_list.sort(key=_sort_key, reverse=True)
+
         for a in filtered_list:
             del a['similarity']
-        
-        logger.debug(f"MusicBrainz artist search returned {len(artist_list)} raw results, {len(filtered_list)} filtered for '{artist}'")
+
+        logger.debug(f"MusicBrainz artist search returned {len(artist_list)} raw results, {len(filtered_list)} filtered for '{search_artist}'")
         return {"artist-list": filtered_list}
     
     def search_release_groups(
@@ -237,10 +328,10 @@ class MusicBrainzClient:
                 ]
             else:
                 queries = self._build_release_group_queries(artist, title_variant)
-            
+
             for query_idx, query in enumerate(queries, 1):
                 logger.debug(f"Query {query_idx}/{len(queries)}: {query}")
-                
+
                 params = {
                     'query': query,
                     'limit': str(limit)
@@ -272,7 +363,48 @@ class MusicBrainzClient:
                     logger.debug(
                         f"Found {len(rg_list)} matching albums with title '{title_variant}' (query {query_idx})"
                     )
-                    return {"release-group-list": rg_list}
+                    # Prefer exact title matches (case-insensitive) when available —
+                    # e.g. "GOTNOTIME, Vol. 5" should match Vol. 5 not Vol. 3.
+                    exact_matches = [rg for rg in rg_list if (rg.get('title') or '').strip().lower() == title_variant.strip().lower()]
+                    if exact_matches:
+                        # sort exact matches by ext:score desc and return
+                        exact_matches.sort(key=lambda r: int(r.get('ext:score') or 0), reverse=True)
+                        return {"release-group-list": exact_matches}
+
+                    # If the requested title includes a volume indicator like 'Vol. 5',
+                    # prefer candidates that include the same volume number.
+                    vol_re = re.search(r"\bvol(?:\.|ume)?\s*#?:?\s*(\d+)\b", title_variant, flags=re.IGNORECASE)
+                    if vol_re:
+                        wanted_vol = vol_re.group(1)
+                        vol_matches = []
+                        for rg in rg_list:
+                            cand_title = (rg.get('title') or '')
+                            cand_vol_m = re.search(r"\bvol(?:\.|ume)?\s*#?:?\s*(\d+)\b", cand_title, flags=re.IGNORECASE)
+                            if cand_vol_m and cand_vol_m.group(1) == wanted_vol:
+                                vol_matches.append(rg)
+                        if vol_matches:
+                            vol_matches.sort(key=lambda r: int(r.get('ext:score') or 0), reverse=True)
+                            logger.debug(f"Selecting {len(vol_matches)} candidate(s) matching requested volume {wanted_vol}")
+                            return {"release-group-list": vol_matches}
+                        else:
+                            # If the user requested a specific volume (Vol N) and we
+                            # couldn't find any matching releases with that same
+                            # volume number, treat it as no match rather than
+                            # returning a different volume (avoids false positives).
+                            logger.debug(f"No release-group candidates matched requested volume {wanted_vol}; skipping matches")
+                            return {"release-group-list": []}
+
+                    # No exact or same-volume matches; prefer releases whose titles
+                    # are most similar to the requested title (client-side title similarity)
+                    scored = []
+                    for rg in rg_list:
+                        cand_title = (rg.get('title') or '')
+                        sim = fuzz.token_set_ratio(normalize_album_title_for_matching(title_variant), normalize_album_title_for_matching(cand_title))
+                        scored.append((sim, int(rg.get('ext:score') or 0), rg))
+                    # sort by similarity then MB score
+                    scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
+                    sorted_rgs = [t[2] for t in scored]
+                    return {"release-group-list": sorted_rgs}
                 else:
                     logger.debug(f"All results filtered out (artist mismatch)")
         
@@ -295,7 +427,7 @@ class MusicBrainzClient:
                 logger.debug("Fallback search returned no results")
                 continue
             logger.debug(f"Fallback search got {len(release_groups)} raw results from MusicBrainz")
-            rg_list = self._parse_release_groups(release_groups, ns, artist, artist_aliases)
+            rg_list = self._parse_release_groups(release_groups, ns, artist, artist_aliases, title_variant)
             if rg_list:
                 logger.debug(f"Found {len(rg_list)} matching albums via fallback for '{title_variant}'")
                 return {"release-group-list": rg_list}
@@ -396,13 +528,55 @@ class MusicBrainzClient:
                 queries.append(f'artist:{clean_artist} releasegroup:{releasegroup}')
         
         return queries
+
+    def _is_artist_match(self, artist_credit_phrase: str, artist: str, artist_aliases: Dict[str, List[str]]) -> bool:
+        """
+        Determine whether the artist credit phrase from MusicBrainz matches
+        the searched artist name, taking into account aliases and simple
+        fuzzy/token-set similarity.
+        """
+        if not artist_credit_phrase or not artist:
+            return False
+
+        try:
+            credit_norm = normalize_artist_name(artist_credit_phrase)
+        except Exception:
+            credit_norm = (artist_credit_phrase or '').lower()
+
+        try:
+            artist_norm = normalize_artist_name(artist)
+        except Exception:
+            artist_norm = (artist or '').lower()
+
+        # Direct containment (common case)
+        if artist_norm in credit_norm:
+            return True
+
+        # Check provided aliases
+        aliases = artist_aliases.get(artist, []) if artist_aliases else []
+        for a in aliases:
+            try:
+                if normalize_artist_name(a) in credit_norm:
+                    return True
+            except Exception:
+                if (a or '').lower() in credit_norm:
+                    return True
+
+        # Fallback to token-set similarity
+        try:
+            sim = fuzz.token_set_ratio(artist_norm, credit_norm)
+        except Exception:
+            sim = fuzz.ratio(artist_norm, credit_norm)
+
+        return sim >= 70
     
     def _parse_release_groups(
         self,
         release_groups: List[ET.Element],
         ns: Dict[str, str],
         artist: str,
-        artist_aliases: Dict[str, List[str]]
+        artist_aliases: Dict[str, List[str]],
+        title_searched: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Parse and filter release group XML elements.
@@ -444,85 +618,16 @@ class MusicBrainzClient:
                     f"(not a match for '{artist}')"
                 )
         
+        # If we have a searched title and there are multiple matches, prefer
+        # exact-title matches (case-insensitive) before falling back to fuzzy
+        # ordering as returned by MusicBrainz / ext:score.
+        if title_searched and rg_list:
+            lower_title = title_searched.strip().lower()
+            exact = [r for r in rg_list if (r.get('title') or '').strip().lower() == lower_title]
+            if exact:
+                # We already have exact title matches; prefer higher ext:score
+                exact.sort(key=lambda r: int(r.get('ext:score') or 0), reverse=True)
+                return exact
+        # Default: return the filtered/collected release-group list
         return rg_list
-    
-    def _is_artist_match(
-        self,
-        found_artist: str,
-        search_artist: str,
-        artist_aliases: Dict[str, List[str]]
-    ) -> bool:
-        """
-        Check if found artist name matches search artist.
         
-        Uses exact matching with special character transformations and
-        alias lookups to avoid false positives.
-        """
-        found_lower = found_artist.lower().strip()
-        search_lower = search_artist.lower().strip()
-        
-        # For bracketed artists like [bsd.u], be very precise
-        if '[' in search_artist and ']' in search_artist:
-            bracket_content = search_artist.strip('[]').lower()
-            return found_lower == search_lower or found_lower == bracket_content
-        
-        # For normal artists, use exact matches with transformations
-        exact_matches = [
-            search_lower,
-            search_artist.lower().replace('!', 'i'),  # !llmind -> illmind
-            search_artist.lower().replace('$', 's'),  # $uicideboy$ -> suicideboys
-        ]
-
-        # Add known aliases
-        if search_lower in artist_aliases:
-            exact_matches.extend([a.lower() for a in artist_aliases[search_lower]])
-            logger.debug(f"Added aliases for '{search_artist}': {artist_aliases[search_lower]}")
-
-        logger.debug(f"Comparing '{found_lower}' against exact list: {exact_matches}")
-        if found_lower in exact_matches:
-            return True
-
-        # Do NOT strip prefixes like 'DJ ' or 'The ' — rely on exact/alias checks
-        # and a fuzzy normalized comparison below. Prefixes are meaningful and
-        # should not be ignored when determining artist identity.
-
-        # Finally, use a fuzzy comparison on normalized names to allow small variations
-        try:
-            sim = fuzz.token_set_ratio(normalize_artist_name(found_artist), normalize_artist_name(search_artist))
-        except Exception:
-            sim = fuzz.ratio(found_lower, search_lower)
-
-        logger.debug(f"Fuzzy artist similarity between '{found_artist}' and '{search_artist}': {sim}")
-        # Accept if similarity is high enough (tuned to avoid false positives)
-        return sim >= 85
-    
-    def get_release_group_by_id(self, mbid: str) -> Optional[Dict[str, Any]]:
-        """
-        Get release group details by MusicBrainz ID.
-        
-        Args:
-            mbid: MusicBrainz release group ID
-            
-        Returns:
-            Release group data or None if not found
-        """
-        params = {'inc': 'artists'}
-        root = self._make_request(f'release-group/{mbid}', params)
-        
-        if root is None:
-            return None
-        
-        ns = {'mb': 'http://musicbrainz.org/ns/mmd-2.0#'}
-        rg = root.find('.//mb:release-group', ns)
-        
-        if rg is None:
-            return None
-        
-        title_elem = rg.find('./mb:title', ns)
-        artist_elem = rg.find('.//mb:artist-credit/mb:name-credit/mb:artist/mb:name', ns)
-        
-        return {
-            'id': rg.get('id', ''),
-            'title': title_elem.text if title_elem is not None else '',
-            'artist-credit-phrase': artist_elem.text if artist_elem is not None else ''
-        }
