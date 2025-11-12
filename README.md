@@ -74,3 +74,34 @@ Contributing
 License & legal
 - This project uses music metadata from third parties (MusicBrainz, Spotify). Ensure you follow each service's terms of use when using this tool.
 
+Configuration and environment variables
+-------------------------------------
+
+Where configuration is read from:
+
+- `config.py` (recommended): copy `config.template.py` to `config.py` and edit values. This file is gitignored and is the primary place to store local settings such as `LIDARR_BASE_URL` and `LIDARR_API_KEY`.
+- Environment variables (fallback): if `config.py` is not present, the code will read configuration from environment variables.
+
+Key variables you may want to set (either in `config.py` or as env vars):
+
+- Lidarr credentials:
+	- `LIDARR_BASE_URL` (e.g. `http://localhost:8686`)
+	- `LIDARR_API_KEY` (your Lidarr API key)
+
+- MusicBrainz / client identity (required by MusicBrainz TOS):
+	- In `config.py` set `MUSICBRAINZ_USER_AGENT = {"app_name": "...", "version": "...", "contact": "your.email@example.com"}`.
+	- As environment variables you can set `MB_APP_NAME`, `MB_VERSION` and `MB_CONTACT` (the code will use these when `config.py` is absent).
+
+Notes and recommendations:
+
+- The MusicBrainz contact email is used in the HTTP User-Agent header and should point to an address where you can be contacted if the MusicBrainz team needs to reach you about API usage. Please update the placeholder `your.email@example.com` in `config.template.py` / `config.py` or set `MB_CONTACT` in your environment.
+- The repository's `.gitignore` includes `.env` and `config.py`; if you keep secrets in a `.env` file, make sure it remains untracked. CI should use repository secrets instead of committing credentials.
+- Example (Windows cmd) to create a `config.py` from the template and edit the MusicBrainz contact:
+
+```cmd
+copy config.template.py config.py
+rem open config.py in an editor and update MUSICBRAINZ_USER_AGENT['contact'] and LIDARR_API_KEY
+```
+
+If you'd like, I can also add a short checklist and sample `.env` example (gitignored) to the repo to make onboarding easier.
+
