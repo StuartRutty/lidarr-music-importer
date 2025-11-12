@@ -73,7 +73,7 @@ except Exception as e:
     logging.error("Please ensure config.py exists (copy from config.template.py)")
     sys.exit(1)
 
-# Legacy constants for backward compatibility (will be removed in Phase 2)
+# Configuration constants
 LIDARR_BASE_URL = config.lidarr_base_url
 LIDARR_API_KEY = config.lidarr_api_key
 QUALITY_PROFILE_ID = config.quality_profile_id
@@ -1184,7 +1184,7 @@ USAGE EXAMPLES:
   python add_albums_to_lidarr.py my_albums.csv --album "Deluxe"
   
   # Process only items with specific status
-  python add_albums_to_lidarr.py my_albums.csv --status pending_refresh
+    python add_albums_to_lidarr.py my_albums.csv --status pending_refresh
   
   # Process only 100 items with logging to file
   python add_albums_to_lidarr.py my_albums.csv --max-items 100 --log-file import.log
@@ -1192,29 +1192,22 @@ USAGE EXAMPLES:
   # Fast processing: skip existing artists, no batch pauses
   python add_albums_to_lidarr.py my_albums.csv --skip-existing --no-batch-pause
   
-  # Retry only failed items with detailed logging
-  python add_albums_to_lidarr.py my_albums.csv --only-failures --log-file retry.log
+        # Retry only failed items with detailed logging (use --status failed)
+            python add_albums_to_lidarr.py my_albums.csv --status failed --log-file retry.log
 
-POWERSHELL SHORTCUTS:
-  Reload your PowerShell profile after making changes:
-    . $PROFILE
-  
-  Testing & Development:
-    lidarr-test-code          - Run pytest (89 tests)
-    lidarr-test-code-cov      - Run tests with coverage report
-    lidarr-test-code-fast     - Stop at first test failure
-    lidarr-test-code-unit     - Run specific test file
-  
-  Script Testing & Production:
-    lidarr-test <csv>         - Dry-run with 10 items
-    lidarr-quick <csv>        - 25 items, only-new
-    lidarr-refresh <csv>      - 10 items (no filters)
-    lidarr-small <csv>        - 50 items, only-new
-    lidarr-medium <csv>       - 100 items, only-new
-    lidarr-daily <csv>        - 200 items, only-new
-    lidarr-retry <csv>        - Retry failures only (max 100)
-    lidarr-batch <csv>        - 200 items with timestamped log
-        """,
+QUICK ALIAS (optional):
+    To create a short shortcut for interactive use, add a small wrapper to your shell.
+    Replace the example path with the correct path to this repository.
+
+    PowerShell (persist by adding to your $PROFILE):
+        function lidarr { python "C:\\path\\to\\repo\\scripts\\add_albums_to_lidarr.py" @args }
+
+    Bash (add to ~/.bashrc or ~/.profile):
+        alias lidarr='python /path/to/repo/scripts/add_albums_to_lidarr.py'
+
+    Note: these are optional convenience snippets. To run directly:
+        python scripts/add_albums_to_lidarr.py my_albums.csv
+                """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
@@ -1234,18 +1227,20 @@ POWERSHELL SHORTCUTS:
                        help="Disable skipping completed items (process all items)")
     parser.add_argument("--skip-existing", action="store_true",
                        help="Skip items where artist already exists in Lidarr (faster processing)")
-    parser.add_argument("--only-failures", action="store_true",
-                       help="Process only items with failure status (excludes completed/monitored)")
-    parser.add_argument("--only-new", action="store_true",
-                       help="Process only items with no status (blank/empty status column)")
+    # Use --status to select rows with a specific status (comma-separated). Special tokens:
+    #   'new'  -> blank/empty status rows
+    #   'failed' -> rows where ItemStatus.should_retry(status) is True
+    # Example: --status pending_refresh,error_timeout or --status new
+    parser.add_argument("--status", type=str,
+                       help="Process only items with specific status(s) (comma-separated). Special tokens: new, failed")
+    # Opposite of --status: exclude rows matching status(s)
+    parser.add_argument("--not-status", dest="not_status", type=str,
+                       help="Exclude items with specific status(s) (comma-separated). Special tokens: new, failed")
     parser.add_argument("--artist", type=str,
                        help="Process only albums by specific artist (case-insensitive partial match)")
     parser.add_argument("--album", type=str,
                        help="Process only albums matching specific title (case-insensitive partial match)")
-    parser.add_argument("--status", type=str,
-                       help="Process only items with specific status (e.g., pending_refresh, error_timeout)")
-    parser.add_argument("--exclude-status", type=str,
-                       help="Exclude items with specific status")
+    # NOTE: legacy alias --exclude-status removed; use --not-status instead
     parser.add_argument("--log-file", type=str,
                        help="Write detailed logs to specified file (in addition to console)")
     parser.add_argument("--progress-interval", type=int, default=50,
@@ -1261,6 +1256,8 @@ POWERSHELL SHORTCUTS:
     # Handle skip-completed logic with new default behavior
     if args.no_skip_completed:
         args.skip_completed = False
+
+    # No legacy alias normalization needed; use --not-status for exclusion
     
     # Setup enhanced logging if log file specified
     if args.log_file:
@@ -1308,99 +1305,125 @@ POWERSHELL SHORTCUTS:
             logging.info("All items have already been processed or are permanently failed!")
             sys.exit(0)
     
-    elif args.only_failures:
-        # Process only failed items (excludes completed/monitored)
-        original_items = items
-        items = [item for item in items if ItemStatus.should_retry(item['status'])]
-        skipped = original_count - len(items)
-        if skipped > 0:
-            logging.info(f"Processing only failures: {len(items)} items, skipped {skipped} successful/untried items")
-        
-        if not items:
-            logging.info("No failed items to process!")
-            sys.exit(0)
+    # (formerly --only-failures handled here) Use --status failed to filter retryable items
     
-    # Apply artist filter if specified
-    if args.artist:
-        artist_filter = args.artist.lower()
-        items_before = len(items)
-        items = [item for item in items if artist_filter in item['artist'].lower()]
-        filtered_count = items_before - len(items)
-        if filtered_count > 0:
-            logging.info(f"Artist filter '{args.artist}': {len(items)} items match, {filtered_count} filtered out")
-        if not items:
-            logging.info(f"No items found matching artist filter: {args.artist}")
-            sys.exit(0)
-    
-    # Apply album filter if specified
-    if args.album:
-        album_filter = args.album.lower()
-        items_before = len(items)
-        items = [item for item in items if album_filter in item['album'].lower()]
-        filtered_count = items_before - len(items)
-        if filtered_count > 0:
-            logging.info(f"Album filter '{args.album}': {len(items)} items match, {filtered_count} filtered out")
-        if not items:
-            logging.info(f"No items found matching album filter: {args.album}")
-            sys.exit(0)
-    
-    # Apply status filter if specified
-    if args.status:
-        items_before = len(items)
-        items = [item for item in items if item['status'] == args.status]
-        filtered_count = items_before - len(items)
-        if filtered_count > 0:
-            logging.info(f"Status filter '{args.status}': {len(items)} items match, {filtered_count} filtered out")
-        if not items:
-            logging.info(f"No items found with status: {args.status}")
-            sys.exit(0)
-    
-    # Apply only-new filter (items with no status)
-    if args.only_new:
-        items_before = len(items)
-        items = [item for item in items if not item.get('status') or item['status'].strip() == '']
-        filtered_count = items_before - len(items)
-        if filtered_count > 0:
-            logging.info(f"Only-new filter: {len(items)} items with blank status, {filtered_count} filtered out")
-        if not items:
-            logging.info(f"No items found with blank status")
-            sys.exit(0)
-    
-    # Apply exclude-status filter if specified
-    if args.exclude_status:
-        items_before = len(items)
-        items = [item for item in items if item['status'] != args.exclude_status]
-        filtered_count = items_before - len(items)
-        if filtered_count > 0:
-            logging.info(f"Exclude status filter '{args.exclude_status}': excluded {filtered_count} items")
-        if not items:
-            logging.info(f"All items were excluded by status filter: {args.exclude_status}")
-            sys.exit(0)
-    
-    # Limit items for testing if requested
-    if args.max_items:
-        items = items[:args.max_items]
-        logging.info(f"Limited to first {len(items)} items for testing")
-    
-    # Get current state of Lidarr library (unless in dry-run mode)
-    if not args.dry_run:
-        logging.info("Fetching existing artists from Lidarr...")
+    # If requested, fetch existing artists early so centralized filtering can skip them
+    existing_artists = {}
+    if args.skip_existing and not args.dry_run:
+        logging.info("Fetching existing artists from Lidarr (for skip-existing filter)...")
         existing_artists = lidarr_client.get_existing_artists()
         logging.info(f"Found {len(existing_artists)} existing artists in Lidarr")
-        
-        # Filter out items where artist already exists if requested
-        if args.skip_existing:
+
+    # Delegate parsing/filtering logic to universal_parser.apply_item_filters
+    # so parsing and filter rules are centralized and testable.
+    # Ensure repo root is importable so we can import the scripts package.
+    repo_root = Path(__file__).parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    try:
+        from scripts.universal_parser import apply_item_filters
+    except Exception:
+        logging.debug("Could not import apply_item_filters from scripts.universal_parser; proceeding with inline filters")
+        apply_item_filters = None
+
+    if apply_item_filters:
+        items = apply_item_filters(
+            items,
+            skip_completed=args.skip_completed,
+            artist=args.artist,
+            album=args.album,
+            status=args.status,
+            exclude_status=args.not_status,
+            max_items=args.max_items,
+            skip_existing=args.skip_existing,
+            existing_artists=existing_artists,
+            csv_handler=csv_handler
+        )
+        logging.info(f"Filtered to {len(items)} items after centralized filtering")
+        if not items:
+            logging.info("No items remain after filtering")
+            sys.exit(0)
+    else:
+        # Fallback to the previous inline filtering if import failed
+        if args.artist:
+            artist_filter = args.artist.lower()
             items_before = len(items)
-            items = [item for item in items if item['artist'].lower() not in existing_artists]
+            items = [item for item in items if artist_filter in item['artist'].lower()]
             filtered_count = items_before - len(items)
             if filtered_count > 0:
-                logging.info(f"Skipped {filtered_count} items where artist already exists in Lidarr")
+                logging.info(f"Artist filter '{args.artist}': {len(items)} items match, {filtered_count} filtered out")
             if not items:
-                logging.info("All remaining artists already exist in Lidarr!")
+                logging.info(f"No items found matching artist filter: {args.artist}")
                 sys.exit(0)
-    else:
-        existing_artists = {}
-        logging.info("Dry-run mode: skipping existing artist lookup")
+        
+        if args.album:
+            album_filter = args.album.lower()
+            items_before = len(items)
+            items = [item for item in items if album_filter in item['album'].lower()]
+            filtered_count = items_before - len(items)
+            if filtered_count > 0:
+                logging.info(f"Album filter '{args.album}': {len(items)} items match, {filtered_count} filtered out")
+            if not items:
+                logging.info(f"No items found matching album filter: {args.album}")
+                sys.exit(0)
+
+        # Status filtering: support comma-separated values and special tokens
+        # Special tokens: 'new' -> blank status, 'failed' -> ItemStatus.should_retry
+        def _matches_token(st: str, token: str) -> bool:
+            tl = token.lower()
+            if tl in ('new', 'blank', 'none', 'empty'):
+                return not (st or '').strip()
+            if tl in ('failed', 'failure', 'fail', 'retry'):
+                return ItemStatus.should_retry(st)
+            # Exact-match comparisons are case-insensitive
+            return (st or '').lower() == tl
+
+        if args.status:
+            items_before = len(items)
+            tokens = [t.strip() for t in args.status.split(',') if t.strip()]
+            filtered = []
+            for it in items:
+                st = (it.get('status') or '').strip()
+                for token in tokens:
+                    if _matches_token(st, token):
+                        filtered.append(it)
+                        break
+            items = filtered
+            filtered_count = items_before - len(items)
+            if filtered_count > 0:
+                logging.info(f"Status filter '{args.status}': {len(items)} items match, {filtered_count} filtered out")
+            if not items:
+                logging.info(f"No items found with status: {args.status}")
+                sys.exit(0)
+
+        # Exclude status filtering (use --not-status)
+        if args.not_status:
+            items_before = len(items)
+            tokens = [t.strip() for t in args.not_status.split(',') if t.strip()]
+            filtered = []
+            for it in items:
+                st = (it.get('status') or '').strip()
+                exclude = False
+                for token in tokens:
+                    if _matches_token(st, token):
+                        exclude = True
+                        break
+                if not exclude:
+                    filtered.append(it)
+            items = filtered
+            filtered_count = items_before - len(items)
+            if filtered_count > 0:
+                logging.info(f"Exclude status filter '{args.not_status}': excluded {filtered_count} items")
+            if not items:
+                logging.info(f"All items were excluded by status filter: {args.not_status}")
+                sys.exit(0)
+
+        if args.max_items:
+            items = items[:args.max_items]
+            logging.info(f"Limited to first {len(items)} items for testing")
+    
+    # existing_artists was fetched above only if needed for filtering; otherwise it's an empty dict
     
     # Initialize processing counters
     successes = 0

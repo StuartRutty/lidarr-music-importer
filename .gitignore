@@ -127,3 +127,6 @@ coverage/
 notes.txt
 TODO.txt
 personal/
+
+# Local helper scripts (kept out of repo; run locally)
+scripts/cleanup_and_release.ps1

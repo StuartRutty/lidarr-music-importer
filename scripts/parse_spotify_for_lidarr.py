@@ -166,7 +166,23 @@ def print_statistics(artist_totals: Dict[str, int],
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Parse Spotify CSV for Lidarr import")
+    parser = argparse.ArgumentParser(
+        description="Parse Spotify CSV for Lidarr import",
+        epilog="""
+QUICK ALIAS (optional):
+  Add a short wrapper if you like (replace /path/to/repo):
+
+  PowerShell (add to $PROFILE):
+    function ps2pairs { python "C:\\path\\to\\repo\\scripts\\parse_spotify_for_lidarr.py" @args }
+
+  Bash (add to ~/.bashrc):
+    alias ps2pairs='python /path/to/repo/scripts/parse_spotify_for_lidarr.py'
+
+Run directly:
+  python scripts/parse_spotify_for_lidarr.py my_spotify_export.csv
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("input_csv", help="Path to Spotify liked songs CSV export")
     parser.add_argument("-o", "--output", default="artist_album_pairs.csv", 
                        help="Output CSV file (default: artist_album_pairs.csv)")

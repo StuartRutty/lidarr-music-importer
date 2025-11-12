@@ -81,15 +81,15 @@ python add_albums_to_lidarr.py albums.csv --skip-existing --max-items 200
 python add_albums_to_lidarr.py albums.csv --skip-existing --no-batch-pause
 ```
 
-### `--only-failures`
-Process only failed items (perfect for retry runs)
+### `--status failed`
+Use `--status failed` to process only items that are retryable (replaces the older `--only-failures` flag).
 
 ```bash
 # Retry after fixing connection issues
-python add_albums_to_lidarr.py albums.csv --only-failures
+python add_albums_to_lidarr.py albums.csv --status failed
 
 # Focus on temporary failures only
-python add_albums_to_lidarr.py albums.csv --only-failures --max-items 50
+python add_albums_to_lidarr.py albums.csv --status failed --max-items 50
 ```
 
 ## ⚡ **Performance Tuning**
@@ -128,7 +128,7 @@ Save detailed logs for troubleshooting
 python add_albums_to_lidarr.py albums.csv --max-items 500 --log-file "$(date +%Y%m%d)_import.log"
 
 # Retry run with separate log
-python add_albums_to_lidarr.py albums.csv --only-failures --log-file retry_$(date +%Y%m%d).log
+python add_albums_to_lidarr.py albums.csv --status failed --log-file retry_$(date +%Y%m%d).log
 
 # Weekly import with timestamped log
 python add_albums_to_lidarr.py albums.csv --skip-completed --max-items 300 --log-file "weekly_$(date +%Y%m%d_%H%M).log"
@@ -164,7 +164,7 @@ python add_albums_to_lidarr.py albums.csv --skip-existing --no-batch-pause --max
 ### 🔧 **Retry Failed Items**
 ```bash
 # Focus on failures after fixing issues
-python add_albums_to_lidarr.py albums.csv --only-failures --max-items 100 --log-file retry.log
+python add_albums_to_lidarr.py albums.csv --status failed --max-items 100 --log-file retry.log
 ```
 
 ### 📊 **Testing New Data**
@@ -189,7 +189,7 @@ python add_albums_to_lidarr.py new_albums.csv --max-items 50 --log-file test_new
 | < 100 items | `--max-items 100` | 5-10 minutes |
 | 100-500 items | `--batch-size 20 --max-items 500` | 30-60 minutes |
 | 500+ items | `--max-items 500` | Process in chunks |
-| Retry run | `--only-failures --max-items 100` | 10-30 minutes |
+| Retry run | `--status failed --max-items 100` | 10-30 minutes |
 | Maintenance | `--skip-existing --max-items 200` | 5-15 minutes |
 
 ## 🚀 **Example Production Commands**
@@ -205,7 +205,7 @@ python add_albums_to_lidarr.py large_import.csv --max-items 300 --log-file wed.l
 python add_albums_to_lidarr.py priority.csv --skip-existing --no-batch-pause --max-items 200
 
 # Sunday: Retry anything that failed during the week
-python add_albums_to_lidarr.py weekly.csv --only-failures --log-file sunday_retry.log
+python add_albums_to_lidarr.py weekly.csv --status failed --log-file sunday_retry.log
 ```
 
 ---
@@ -222,7 +222,7 @@ alias lidarr-test-code-fast="pytest -x"
 # Script Testing & Production
 alias lidarr-test="python add_albums_to_lidarr.py --dry-run --max-items 10"
 alias lidarr-daily="python add_albums_to_lidarr.py --max-items 200"
-alias lidarr-retry="python add_albums_to_lidarr.py --only-failures --max-items 100"
+alias lidarr-retry="python add_albums_to_lidarr.py --status failed --max-items 100"
 alias lidarr-batch="python add_albums_to_lidarr.py --max-items 200 --batch-size 25 --log-file lidarr_$(date +%H%M_%Y%m%d).log"
 ```
 
@@ -249,8 +249,8 @@ function lidarr-test {
 function lidarr-daily { 
     python add_albums_to_lidarr.py $args --max-items 200 
 }
-function lidarr-retry { 
-    python add_albums_to_lidarr.py $args --only-failures --max-items 100 
+    function lidarr-retry { 
+    python add_albums_to_lidarr.py $args --status failed --max-items 100 
 }
 function lidarr-batch { 
     $timestamp = Get-Date -Format "HHmm_yyyyMMdd"

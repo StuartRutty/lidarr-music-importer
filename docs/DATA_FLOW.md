@@ -241,6 +241,6 @@ ERROR: MusicBrainz request failed: Connection aborted
 
 3. **Check results:** Review CSV status column
 
-4. **Retry failures:** Use `--only-failures` flag
+4. **Retry failures:** Use `--status failed` flag
 
 5. **Celebrate!** 🎉 Much better match rates!

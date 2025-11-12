@@ -128,3 +128,30 @@ Kendrick Lamar,DAMN.,failed,,,Artist not found in MusicBrainz
 """
     csv_path.write_text(csv_content, encoding="utf-8")
     return csv_path
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Print a concise, one-line summary at the end of the test run.
+
+    This avoids creating any files and keeps CI/pr output easy to scan.
+    """
+    stats = getattr(terminalreporter, "stats", {})
+
+    def _count(key):
+        return len(stats.get(key, [])) if stats.get(key) is not None else 0
+
+    passed = _count('passed')
+    failed = _count('failed')
+    skipped = _count('skipped')
+    xfailed = _count('xfailed')
+    xpassed = _count('xpassed')
+    errors = _count('error')
+
+    total = passed + failed + skipped + xfailed + xpassed + errors
+
+    # Write a compact summary line to the terminal (no files written)
+    terminalreporter.write_sep("=", "pytest summary")
+    terminalreporter.write_line(
+        f"Total: {total}  Passed: {passed}  Failed: {failed}  Skipped: {skipped}  "
+        f"Errors: {errors}  xfailed: {xfailed}  xpassed: {xpassed}"
+    )

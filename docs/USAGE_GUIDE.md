@@ -120,7 +120,7 @@ grep -c "refresh_triggered" your_data.csv
 
 ```bash
 # After fixing configuration issues, retry only failed items
-python add_albums_to_lidarr.py your_data.csv --skip-completed
+python add_albums_to_lidarr.py your_data.csv --status failed
 ```
 
 ## MusicBrainz enrichment — parser-first workflow (Nov 2025)

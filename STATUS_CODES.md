@@ -32,7 +32,7 @@ These statuses indicate permanent issues. Items with these statuses will be skip
 | `skip_api_error` | Lidarr API authentication/authorization failed | Check API key and permissions |
 
 ### ❌ ERROR STATES (temporary, retry possible)
-These statuses indicate temporary issues that may resolve with retry. Use `--only-failures` to retry these.
+These statuses indicate temporary issues that may resolve with retry. Use `--status failed` to retry these.
 
 | Status Code | Description | Next Action |
 |-------------|-------------|-------------|
@@ -69,7 +69,8 @@ python add_albums_to_lidarr.py albums.csv --no-skip-completed
 ### Retry Failed Items
 ```bash
 # Process only error states and pending states
-python add_albums_to_lidarr.py albums.csv --only-failures
+# Use the new tokenized --status flag. Use the special token 'failed' to select retryable items.
+python add_albums_to_lidarr.py albums.csv --status failed
 ```
 
 ### Status-Specific Processing
@@ -91,7 +92,28 @@ If you see items with `pending_refresh` status:
 If you see many `error_connection` items:
 1. Check your network connection to Lidarr
 2. Verify Lidarr is running and accessible
-3. Run: `python add_albums_to_lidarr.py albums.csv --only-failures`
+3. Run: `python add_albums_to_lidarr.py albums.csv --status failed`
+
+## Filtering with --status / --not-status
+
+The importer supports a flexible `--status` filter that accepts comma-separated
+status names and a couple of special tokens for convenience:
+
+- `new` — select rows with a blank/empty `status` column
+- `failed` — select rows that should be retried (use `--status failed`, replaces the old `--only-failures`)
+
+Examples:
+
+```bash
+# Select items that are pending or errored
+python add_albums_to_lidarr.py albums.csv --status pending_refresh,error_connection
+
+# Select only rows that have no status (new items)
+python add_albums_to_lidarr.py albums.csv --status new
+
+# Exclude already_monitored and skip_no_musicbrainz
+python add_albums_to_lidarr.py albums.csv --not-status already_monitored,skip_no_musicbrainz
+```
 
 ### MusicBrainz Issues
 If you see `skip_no_musicbrainz` items:

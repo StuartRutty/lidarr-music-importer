@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional, Dict, Any, List
 import requests
 from rapidfuzz import fuzz
+from lib.text_utils import normalize_artist_name, normalize_album_title_for_matching, strip_album_suffixes
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,8 @@ class MusicBrainzClient:
         artist: str,
         releasegroup: str,
         limit: int = 5,
-        artist_aliases: Optional[Dict[str, List[str]]] = None
+        artist_aliases: Optional[Dict[str, List[str]]] = None,
+        artist_mbid: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Search for a release group (album) by artist and title.
@@ -217,12 +219,24 @@ class MusicBrainzClient:
         title_variations = self._generate_title_variations(releasegroup)
         logger.debug(f"Generated {len(title_variations)} title variations to try: {title_variations}")
         
+        # If we have a MusicBrainz artist MBID, prefer queries using arid: to
+        # constrain by the canonical MB artist id — this avoids artist-name
+        # mismatches (case/punctuation/alias differences).
+        use_arid = bool(artist_mbid)
+
         # Try each title variation
         for title_idx, title_variant in enumerate(title_variations, 1):
             logger.debug(f"Trying title variation {title_idx}/{len(title_variations)}: '{title_variant}'")
             
             # Build progressive query strategies for this title variant
-            queries = self._build_release_group_queries(artist, title_variant)
+            if use_arid:
+                # Prefer arid:<mbid> queries which are much more reliable
+                queries = [
+                    f'arid:{artist_mbid} AND releasegroup:"{title_variant}"',
+                    f'arid:{artist_mbid} AND releasegroup:{title_variant}',
+                ]
+            else:
+                queries = self._build_release_group_queries(artist, title_variant)
             
             for query_idx, query in enumerate(queries, 1):
                 logger.debug(f"Query {query_idx}/{len(queries)}: {query}")
@@ -263,6 +277,28 @@ class MusicBrainzClient:
                     logger.debug(f"All results filtered out (artist mismatch)")
         
         # No successful queries with any title variation
+        # Final fallback: try searching by releasegroup/title only (no artist constraint)
+        # This can find entries that exist under slightly different artist credit formatting
+        # and lets us inspect artist-credit phrases to find a match.
+        for title_variant in title_variations:
+            logger.debug(f"Fallback: trying releasegroup-only search for '{title_variant}'")
+            params = {'query': f'releasegroup:"{title_variant}"', 'limit': str(limit)}
+            root = self._make_request('release-group', params)
+            if root is None:
+                continue
+            ns = {
+                'mb': 'http://musicbrainz.org/ns/mmd-2.0#',
+                'ns2': 'http://musicbrainz.org/ns/ext#-2.0'
+            }
+            release_groups = root.findall('.//mb:release-group', ns)
+            if not release_groups:
+                logger.debug("Fallback search returned no results")
+                continue
+            logger.debug(f"Fallback search got {len(release_groups)} raw results from MusicBrainz")
+            rg_list = self._parse_release_groups(release_groups, ns, artist, artist_aliases)
+            if rg_list:
+                logger.debug(f"Found {len(rg_list)} matching albums via fallback for '{title_variant}'")
+                return {"release-group-list": rg_list}
         logger.debug(
             f"No matches found after trying {len(title_variations)} title variations"
         )
@@ -297,13 +333,25 @@ class MusicBrainzClient:
             if title_case not in variations:
                 variations.append(title_case)
                 logger.debug(f"      Title variation: '{title}' → '{title_case}' (title case)")
-        
+
         # Try all caps if it's a short title (likely an acronym)
         if len(title) <= 6 and not title.isupper():
             upper_title = title.upper()
             if upper_title not in variations:
                 variations.append(upper_title)
                 logger.debug(f"      Title variation: '{title}' → '{upper_title}' (uppercase)")
+
+        # Additional helpful variations: replace ampersand with 'and', remove commas/periods
+        amp = title.replace('&', 'and')
+        if amp not in variations:
+            variations.append(amp)
+            logger.debug(f"      Title variation: '{title}' → '{amp}' (ampersand→and)")
+
+        no_punct = ''.join(ch for ch in title if ch.isalnum() or ch.isspace())
+        no_punct = ' '.join(no_punct.split())
+        if no_punct and no_punct not in variations:
+            variations.append(no_punct)
+            logger.debug(f"      Title variation: '{title}' → '{no_punct}' (removed punctuation)")
         
         return variations
     
@@ -424,14 +472,29 @@ class MusicBrainzClient:
             search_artist.lower().replace('!', 'i'),  # !llmind -> illmind
             search_artist.lower().replace('$', 's'),  # $uicideboy$ -> suicideboys
         ]
-        
+
         # Add known aliases
         if search_lower in artist_aliases:
             exact_matches.extend([a.lower() for a in artist_aliases[search_lower]])
             logger.debug(f"Added aliases for '{search_artist}': {artist_aliases[search_lower]}")
-        
-        logger.debug(f"Comparing '{found_lower}' against: {exact_matches}")
-        return found_lower in exact_matches
+
+        logger.debug(f"Comparing '{found_lower}' against exact list: {exact_matches}")
+        if found_lower in exact_matches:
+            return True
+
+        # Do NOT strip prefixes like 'DJ ' or 'The ' — rely on exact/alias checks
+        # and a fuzzy normalized comparison below. Prefixes are meaningful and
+        # should not be ignored when determining artist identity.
+
+        # Finally, use a fuzzy comparison on normalized names to allow small variations
+        try:
+            sim = fuzz.token_set_ratio(normalize_artist_name(found_artist), normalize_artist_name(search_artist))
+        except Exception:
+            sim = fuzz.ratio(found_lower, search_lower)
+
+        logger.debug(f"Fuzzy artist similarity between '{found_artist}' and '{search_artist}': {sim}")
+        # Accept if similarity is high enough (tuned to avoid false positives)
+        return sim >= 85
     
     def get_release_group_by_id(self, mbid: str) -> Optional[Dict[str, Any]]:
         """

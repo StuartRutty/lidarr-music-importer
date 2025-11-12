@@ -52,7 +52,7 @@ function lidarr-retry {
     .EXAMPLE
     lidarr-retry albums.csv
     #>
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --only-failures
+    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status failed
 }
 
 function lidarr-refresh {

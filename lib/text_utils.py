@@ -119,8 +119,9 @@ def strip_album_suffixes(album_title: str) -> str:
     ]
     
     result = album_title
+    # Use case-insensitive matching so variants like "(DELUXE EDITION)" are removed
     for pattern in patterns:
-        result = re.sub(pattern, '', result).strip()
+        result = re.sub(pattern, '', result, flags=re.IGNORECASE).strip()
     
     return result
 
@@ -194,7 +195,7 @@ def normalize_album_title_for_matching(title: str) -> str:
     return normalized
 
 
-def clean_csv_input(text: str, is_artist: bool = False) -> str:
+def clean_csv_input(text: str, is_artist: bool = False, strip_suffixes: bool = True) -> str:
     """
     Clean and format artist names and album titles from CSV input.
     
@@ -245,8 +246,8 @@ def clean_csv_input(text: str, is_artist: bool = False) -> str:
     # 6. Normalize censored profanity (F*ck → Fuck)
     result = normalize_profanity(result)
     
-    # 7. For album titles: strip common suffixes that prevent matching
-    if not is_artist:
+    # 7. For album titles: optionally strip common suffixes that prevent matching
+    if not is_artist and strip_suffixes:
         result = strip_album_suffixes(result)
     
     # 8. Final strip to remove any trailing/leading whitespace from transformations

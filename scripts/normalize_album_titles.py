@@ -30,6 +30,16 @@ EXAMPLES OF NORMALIZATION:
     "Born Sinner (Remastered)" -> "Born Sinner"
     "The Life Of Pablo [Explicit]" -> "The Life Of Pablo"
     "Views (Deluxe Version)" -> "Views"
+
+QUICK ALIAS (optional):
+    If you'd like a short command to run this script interactively, add one of the
+    following to your shell (replace /path/to/repo):
+
+    PowerShell (add to $PROFILE):
+        function nat { python "C:\\path\\to\\repo\\scripts\\normalize_album_titles.py" @args }
+
+    Bash (add to ~/.bashrc):
+        alias nat='python /path/to/repo/scripts/normalize_album_titles.py'
 """
 
 import csv

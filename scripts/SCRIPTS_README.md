@@ -6,7 +6,7 @@ Tracked scripts
 
 - `add_albums_to_lidarr.py` — main importer that reads an enriched CSV and adds albums to a Lidarr instance.
 - `universal_parser.py` — auto-detects input formats (Spotify CSV, simple CSV, text) and writes an enriched CSV with MusicBrainz IDs by default.
-- `parse_spotify_for_lidarr.py` — legacy helper to convert a Spotify export to a simple CSV.
+-- `parse_spotify_for_lidarr.py` — helper to convert a Spotify export to a simple CSV (legacy/kept for backward compatibility).
 - `clean_albums.py` — CSV cleaning utilities used during preprocessing.
 - `normalize_album_titles.py` — album title normalizer utilities (helper script).
 - `fix_musicbrainz.py` — utilities to patch or correct MusicBrainz IDs in CSVs.
