@@ -25,9 +25,19 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          # Make sure pip exists for this Python interpreter
+          python -m ensurepip --upgrade || true
+
+          # If ensurepip didn't install pip, fallback to get-pip.py
+          if ! python -m pip --version >/dev/null 2>&1; then
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python -
+          fi
+
+          # Upgrade packaging basics used during builds
+          python -m pip install --upgrade pip setuptools wheel
+
+          # Install project requirements and package in editable mode
           pip install -r requirements.txt
-          # Install package in editable mode so tests import via package name
           pip install -e .
 
       - name: Debug Python path
