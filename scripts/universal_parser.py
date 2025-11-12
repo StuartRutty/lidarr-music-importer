@@ -121,7 +121,15 @@ class UniversalParser:
             return 'text_dash'
         return 'unknown'
 
-    def parse_spotify_csv(self, file_path: str, min_artist_songs: int = 3, min_album_songs: int = 2) -> None:
+    def parse_spotify_csv(
+        self,
+        file_path: str,
+        min_artist_songs: int = 3,
+        min_album_songs: int = 2,
+        artist_filter: Optional[str] = None,
+        album_filter: Optional[str] = None,
+        max_items: Optional[int] = None,
+    ) -> None:
         # Read CSV and aggregate by artist+album counting tracks
         artist_album_counts: Dict[Tuple[str, str], int] = {}
         try:
@@ -160,6 +168,16 @@ class UniversalParser:
                     # Preserve the original album title (don't strip suffixes yet)
                     artist = clean_csv_input(artist_raw, is_artist=True)
                     album = clean_csv_input(album_raw, is_artist=False, strip_suffixes=False)
+                    # Apply simple artist/album filters early (case-insensitive substring)
+                    if artist_filter and artist_filter.lower() not in artist.lower():
+                        continue
+                    if album_filter and album_filter.lower() not in album.lower():
+                        continue
+
+                    # If max_items is set, stop collecting new unique pairs once reached
+                    if max_items and len(artist_album_counts) >= int(max_items):
+                        # we still increment raw_entries but avoid adding new keys
+                        continue
                     # normalized form used for searches (strip edition suffixes for better MB matches)
                     album_search = strip_album_suffixes(album)
                     key = (artist, album)
@@ -169,7 +187,16 @@ class UniversalParser:
             raise
 
     # Apply filters based on counts
+        # Compute artist-level counts for min_artist_songs filtering
+        artist_totals: Dict[str, int] = {}
+        for (a, _), c in artist_album_counts.items():
+            artist_totals[a] = artist_totals.get(a, 0) + c
+
         for (artist, album), track_count in artist_album_counts.items():
+            # Filter by artist-level minimum songs
+            if min_artist_songs and artist_totals.get(artist, 0) < int(min_artist_songs):
+                self.stats['spotify_filtered_artists'] += 1
+                continue
             # Filter low-activity artists/albums
             if track_count < min_album_songs:
                 self.stats['spotify_filtered_albums'] += 1
@@ -180,7 +207,7 @@ class UniversalParser:
             entry = AlbumEntry(artist=artist, album=album, album_search=strip_album_suffixes(album), track_count=track_count, source_format='spotify_csv')
             self.entries.append(entry)
 
-    def parse_simple_csv(self, file_path: str) -> None:
+    def parse_simple_csv(self, file_path: str, artist_filter: Optional[str] = None, album_filter: Optional[str] = None, max_items: Optional[int] = None) -> None:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 reader = csv.reader(f)
@@ -191,11 +218,17 @@ class UniversalParser:
                     if len(row) >= 2:
                         artist = clean_csv_input(row[0], is_artist=True)
                         album = clean_csv_input(row[1], is_artist=False, strip_suffixes=False)
+                        if artist_filter and artist_filter.lower() not in artist.lower():
+                            continue
+                        if album_filter and album_filter.lower() not in album.lower():
+                            continue
+                        if max_items and len(self.entries) >= int(max_items):
+                            continue
                         self.entries.append(AlbumEntry(artist=artist, album=album, album_search=strip_album_suffixes(album), source_format='simple_csv'))
         except FileNotFoundError:
             raise
 
-    def parse_text_format(self, file_path: str, format_type: str) -> None:
+    def parse_text_format(self, file_path: str, format_type: str, artist_filter: Optional[str] = None, album_filter: Optional[str] = None, max_items: Optional[int] = None) -> None:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 for line in f:
@@ -207,6 +240,12 @@ class UniversalParser:
                         artist, album = [p.strip() for p in line.split(' - ', 1)]
                         artist = clean_csv_input(artist, is_artist=True)
                         album = clean_csv_input(album, is_artist=False, strip_suffixes=False)
+                        if artist_filter and artist_filter.lower() not in artist.lower():
+                            continue
+                        if album_filter and album_filter.lower() not in album.lower():
+                            continue
+                        if max_items and len(self.entries) >= int(max_items):
+                            continue
                         self.entries.append(AlbumEntry(artist=artist, album=album, album_search=strip_album_suffixes(album), source_format='text_dash'))
                     elif format_type == 'text_by' and ' by ' in line:
                         parts = line.rsplit(' by ', 1)
@@ -214,6 +253,12 @@ class UniversalParser:
                             album, artist = parts
                             artist = clean_csv_input(artist, is_artist=True)
                             album = clean_csv_input(album, is_artist=False, strip_suffixes=False)
+                            if artist_filter and artist_filter.lower() not in artist.lower():
+                                continue
+                            if album_filter and album_filter.lower() not in album.lower():
+                                continue
+                            if max_items and len(self.entries) >= int(max_items):
+                                continue
                             self.entries.append(AlbumEntry(artist=artist, album=album, album_search=strip_album_suffixes(album), source_format='text_by'))
                     else:
                         # fallback: try split on dash
@@ -221,6 +266,12 @@ class UniversalParser:
                             artist, album = [p.strip() for p in line.split(' - ', 1)]
                             artist = clean_csv_input(artist, is_artist=True)
                             album = clean_csv_input(album, is_artist=False, strip_suffixes=False)
+                            if artist_filter and artist_filter.lower() not in artist.lower():
+                                continue
+                            if album_filter and album_filter.lower() not in album.lower():
+                                continue
+                            if max_items and len(self.entries) >= int(max_items):
+                                continue
                             self.entries.append(AlbumEntry(artist=artist, album=album, album_search=strip_album_suffixes(album), source_format='text_fallback'))
         except FileNotFoundError:
             raise
@@ -375,11 +426,18 @@ class UniversalParser:
         self.stats['format_detected'] = format_type
 
         if format_type == 'spotify_csv':
-            self.parse_spotify_csv(file_path, min_artist_songs=kwargs.get('min_artist_songs', 3), min_album_songs=kwargs.get('min_album_songs', 2))
+            self.parse_spotify_csv(
+                file_path,
+                min_artist_songs=kwargs.get('min_artist_songs', 3),
+                min_album_songs=kwargs.get('min_album_songs', 2),
+                artist_filter=kwargs.get('artist'),
+                album_filter=kwargs.get('album'),
+                max_items=kwargs.get('max_items')
+            )
         elif format_type == 'simple_csv':
-            self.parse_simple_csv(file_path)
+            self.parse_simple_csv(file_path, artist_filter=kwargs.get('artist'), album_filter=kwargs.get('album'), max_items=kwargs.get('max_items'))
         elif format_type in ['text_dash', 'text_by', 'tsv']:
-            self.parse_text_format(file_path, format_type)
+            self.parse_text_format(file_path, format_type, artist_filter=kwargs.get('artist'), album_filter=kwargs.get('album'), max_items=kwargs.get('max_items'))
         else:
             logging.info("🔄 Trying best-effort parsing...")
             try:
@@ -525,7 +583,14 @@ def main() -> None:
     up = UniversalParser(fuzzy_threshold=args.fuzzy_threshold, normalize=not args.no_normalize)
 
     try:
-        up.parse_file(args.input, min_artist_songs=args.min_artist_songs, min_album_songs=args.min_album_songs)
+        up.parse_file(
+            args.input,
+            min_artist_songs=args.min_artist_songs,
+            min_album_songs=args.min_album_songs,
+            artist=args.artist,
+            album=args.album,
+            max_items=args.max_items,
+        )
     except FileNotFoundError:
         logging.error(f"File not found: {args.input}")
         sys.exit(1)
@@ -533,17 +598,8 @@ def main() -> None:
         logging.error(f"Error parsing file: {exc}")
         sys.exit(1)
 
-    # apply filters
-    if args.artist:
-        artist_filter = args.artist.lower()
-        up.entries = [e for e in up.entries if artist_filter in e.artist.lower()]
-    if args.album:
-        album_filter = args.album.lower()
-        up.entries = [e for e in up.entries if album_filter in e.album.lower()]
-
-    # limit items (useful for debugging small batches)
-    if getattr(args, 'max_items', None):
-        up.entries = up.entries[: args.max_items]
+    # Note: artist/album/max-items filters are applied during parsing to avoid
+    # unnecessary MusicBrainz lookups. They are passed into parse_file above.
 
     if not args.no_enrich_musicbrainz:
         try:

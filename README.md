@@ -105,3 +105,8 @@ rem open config.py in an editor and update MUSICBRAINZ_USER_AGENT['contact'] and
 
 If you'd like, I can also add a short checklist and sample `.env` example (gitignored) to the repo to make onboarding easier.
 
+Parser behavior note
+--------------------
+
+The parser applies `--artist`, `--album`, `--max-items`, `--min-artist-songs` and `--min-album-songs` filters during parsing (before MusicBrainz lookups) to avoid unnecessary API requests. Use these flags to limit which rows get enriched.
+
