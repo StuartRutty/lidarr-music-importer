@@ -538,14 +538,14 @@ class UniversalParser:
 def build_parser() -> argparse.ArgumentParser:
     epilog = """
 EXAMPLES:
-  python scripts/universal_parser.py input.txt -o albums.csv
+  py -3 scripts/universal_parser.py input.txt -o albums.csv
 
 QUICK ALIAS (optional):
   PowerShell (add to $PROFILE):
-    function up { python "C:\\path\\to\\repo\\scripts\\universal_parser.py" @args }
+    function up { py -3 "C:\\path\\to\\repo\\scripts\\universal_parser.py" @args }
 
   Bash:
-    alias up='python /path/to/repo/scripts/universal_parser.py'
+    alias up='py -3 /path/to/repo/scripts/universal_parser.py'
 """
 
     parser = argparse.ArgumentParser(
@@ -613,7 +613,7 @@ def main() -> None:
 
     if not args.dry_run:
         up.write_output(args.output, include_risk_column=args.include_risk_info, skip_risky=args.skip_risky)
-        logging.info(f"✅ Done! Output ready for: add_albums_to_lidarr.py {args.output}")
+        logging.info(f"✅ Done! Output ready for: py -3 add_albums_to_lidarr.py {args.output}")
     else:
         logging.info("🔍 Dry run complete - no output file written")
 

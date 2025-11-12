@@ -107,14 +107,14 @@ def _generate_title_variations(self, title: str) -> List[str]:
 
 ```bash
 # Just run normally - title variations happen automatically
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 ```
 
 ### See Detailed Logs
 
 ```bash
 # Enable INFO level logging to see title variations being tried
-python add_albums_to_lidarr.py albums.csv --log-file debug.log
+py -3 add_albums_to_lidarr.py albums.csv --log-file debug.log
 ```
 
 The log will show:
@@ -130,7 +130,7 @@ The log will show:
 
 ```bash
 # Test albums that previously failed
-python add_albums_to_lidarr.py albums.csv --album "ep seeds" --max-items 1
+py -3 add_albums_to_lidarr.py albums.csv --album "ep seeds" --max-items 1
 ```
 
 ## Configuration
@@ -187,7 +187,7 @@ No configuration changes needed! The title variation feature is:
 
 Run comprehensive tests:
 ```bash
-python tests/test_mb_search_enhanced.py
+py -3 -m pytest tests/test_mb_search_enhanced.py
 ```
 
 Tests include:

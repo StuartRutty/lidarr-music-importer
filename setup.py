@@ -90,8 +90,8 @@ def main():
     print("🎉 Setup complete!")
     print("\n📋 Next steps:")
     print("1. Edit config.py with your Lidarr settings")
-    print("2. Test connection: python scripts/test_lidarr_connection.py")
-    print("3. Run example: python scripts/add_albums_to_lidarr.py examples/example_albums.csv --dry-run")
+    print("2. Test connection: py -3 scripts/test_lidarr_connection.py")
+    print("3. Run example: py -3 scripts/add_albums_to_lidarr.py examples/example_albums.csv --dry-run")
     print("\n📖 See README.md for detailed usage instructions")
 
 if __name__ == "__main__":

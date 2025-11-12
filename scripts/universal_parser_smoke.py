@@ -79,14 +79,14 @@ class UniversalParser:
 def build_parser() -> argparse.ArgumentParser:
     epilog = """
 EXAMPLES:
-  python scripts/universal_parser_smoke.py input.txt -o albums.csv
+  py -3 scripts/universal_parser_smoke.py input.txt -o albums.csv
 
 QUICK ALIAS (optional):
   PowerShell (add to $PROFILE):
-    function up { python "C:\\path\\to\\repo\\scripts\\universal_parser_smoke.py" @args }
+    function up { py -3 "C:\\path\\to\\repo\\scripts\\universal_parser_smoke.py" @args }
 
   Bash:
-    alias up='python /path/to/repo/scripts/universal_parser_smoke.py'
+    alias up='py -3 /path/to/repo/scripts/universal_parser_smoke.py'
 """
 
     p = argparse.ArgumentParser(

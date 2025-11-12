@@ -17,7 +17,7 @@ cp config_template.py config.py
 nano config.py  # or use your editor
 
 # Verify configuration loads
-python -c "from lib.config import Config; print(Config())"
+py -3 -c "from lib.config import Config; print(Config())"
 ```
 
 ### Method 2: Environment Variables
@@ -44,13 +44,13 @@ Limit processing to first N items - essential for production runs!
 
 ```bash
 # Test with small batch first
-python add_albums_to_lidarr.py albums.csv --max-items 50
+py -3 add_albums_to_lidarr.py albums.csv --max-items 50
 
 # Process in chunks of 500
-python add_albums_to_lidarr.py albums.csv --max-items 500
+py -3 add_albums_to_lidarr.py albums.csv --max-items 500
 
 # Daily processing quota
-python add_albums_to_lidarr.py albums.csv --max-items 200 --skip-completed
+py -3 add_albums_to_lidarr.py albums.csv --max-items 200 --skip-completed
 ```
 
 **💡 Tip**: Start with 50-100 items for new datasets to catch issues early.
@@ -62,10 +62,10 @@ Process ALL items including completed ones (default behavior skips completed)
 
 ```bash
 # Process everything including previously completed items
-python add_albums_to_lidarr.py albums.csv --no-skip-completed
+py -3 add_albums_to_lidarr.py albums.csv --no-skip-completed
 
 # Daily processing quota (skips completed by default)
-python add_albums_to_lidarr.py albums.csv --max-items 200
+py -3 add_albums_to_lidarr.py albums.csv --max-items 200
 ```
 
 **💡 Tip**: Default behavior skips completed items. Use `--no-skip-completed` only when you need to reprocess everything.
@@ -75,10 +75,10 @@ Skip artists already in Lidarr (faster processing)
 
 ```bash
 # Quick run - only new artists
-python add_albums_to_lidarr.py albums.csv --skip-existing --max-items 200
+py -3 add_albums_to_lidarr.py albums.csv --skip-existing --max-items 200
 
 # Fast weekend processing
-python add_albums_to_lidarr.py albums.csv --skip-existing --no-batch-pause
+py -3 add_albums_to_lidarr.py albums.csv --skip-existing --no-batch-pause
 ```
 
 ### `--status failed`
@@ -86,10 +86,10 @@ Use `--status failed` to process only items that are retryable (replaces the old
 
 ```bash
 # Retry after fixing connection issues
-python add_albums_to_lidarr.py albums.csv --status failed
+py -3 add_albums_to_lidarr.py albums.csv --status failed
 
 # Focus on temporary failures only
-python add_albums_to_lidarr.py albums.csv --status failed --max-items 50
+py -3 add_albums_to_lidarr.py albums.csv --status failed --max-items 50
 ```
 
 ## ⚡ **Performance Tuning**
@@ -99,23 +99,23 @@ Control API load and processing speed
 
 ```bash
 # Conservative (default): 10 items, 10s pause
-python add_albums_to_lidarr.py albums.csv --max-items 100
+py -3 add_albums_to_lidarr.py albums.csv --max-items 100
 
 # Faster: larger batches, shorter pauses  
-python add_albums_to_lidarr.py albums.csv --batch-size 25 --max-items 200
+py -3 add_albums_to_lidarr.py albums.csv --batch-size 25 --max-items 200
 
 # Maximum speed (use carefully!)
-python add_albums_to_lidarr.py albums.csv --no-batch-pause --skip-existing
+py -3 add_albums_to_lidarr.py albums.csv --no-batch-pause --skip-existing
 ```
 
 ### Progress Monitoring
 
 ```bash
 # More frequent progress updates for large runs
-python add_albums_to_lidarr.py albums.csv --progress-interval 25 --max-items 1000
+py -3 add_albums_to_lidarr.py albums.csv --progress-interval 25 --max-items 1000
 
 # Less frequent for smaller runs
-python add_albums_to_lidarr.py albums.csv --progress-interval 100
+py -3 add_albums_to_lidarr.py albums.csv --progress-interval 100
 ```
 
 ## 📝 **Logging & Debugging**
@@ -125,13 +125,13 @@ Save detailed logs for troubleshooting
 
 ```bash
 # Production run with logging
-python add_albums_to_lidarr.py albums.csv --max-items 500 --log-file "$(date +%Y%m%d)_import.log"
+py -3 add_albums_to_lidarr.py albums.csv --max-items 500 --log-file "$(date +%Y%m%d)_import.log"
 
 # Retry run with separate log
-python add_albums_to_lidarr.py albums.csv --status failed --log-file retry_$(date +%Y%m%d).log
+py -3 add_albums_to_lidarr.py albums.csv --status failed --log-file retry_$(date +%Y%m%d).log
 
 # Weekly import with timestamped log
-python add_albums_to_lidarr.py albums.csv --skip-completed --max-items 300 --log-file "weekly_$(date +%Y%m%d_%H%M).log"
+py -3 add_albums_to_lidarr.py albums.csv --skip-completed --max-items 300 --log-file "weekly_$(date +%Y%m%d_%H%M).log"
 ```
 
 ## 🎯 **Recommended Production Workflows**
@@ -139,39 +139,39 @@ python add_albums_to_lidarr.py albums.csv --skip-completed --max-items 300 --log
 ### 🥇 **First-Time Import** (Large Dataset)
 ```bash
 # 1. Test small batch
-python add_albums_to_lidarr.py albums.csv --dry-run --max-items 10
+py -3 add_albums_to_lidarr.py albums.csv --dry-run --max-items 10
 
 # 2. Start with conservative run
-python add_albums_to_lidarr.py albums.csv --max-items 100 --log-file initial.log
+py -3 add_albums_to_lidarr.py albums.csv --max-items 100 --log-file initial.log
 
 # 3. Continue in larger batches (completed items automatically skipped)
-python add_albums_to_lidarr.py albums.csv --max-items 500 --log-file batch1.log
-python add_albums_to_lidarr.py albums.csv --max-items 500 --log-file batch2.log
+py -3 add_albums_to_lidarr.py albums.csv --max-items 500 --log-file batch1.log
+py -3 add_albums_to_lidarr.py albums.csv --max-items 500 --log-file batch2.log
 ```
 
 ### 🔄 **Daily Maintenance**
 ```bash
 # Quick daily run - only new/failed items (default behavior)
-python add_albums_to_lidarr.py albums.csv --max-items 200 --log-file daily_$(date +%Y%m%d).log
+py -3 add_albums_to_lidarr.py albums.csv --max-items 200 --log-file daily_$(date +%Y%m%d).log
 ```
 
 ### ⚡ **Fast Weekend Processing**
 ```bash
 # High-speed run for large backlogs
-python add_albums_to_lidarr.py albums.csv --skip-existing --no-batch-pause --max-items 1000 --log-file weekend.log
+py -3 add_albums_to_lidarr.py albums.csv --skip-existing --no-batch-pause --max-items 1000 --log-file weekend.log
 ```
 
 ### 🔧 **Retry Failed Items**
 ```bash
 # Focus on failures after fixing issues
-python add_albums_to_lidarr.py albums.csv --status failed --max-items 100 --log-file retry.log
+py -3 add_albums_to_lidarr.py albums.csv --status failed --max-items 100 --log-file retry.log
 ```
 
 ### 📊 **Testing New Data**
 ```bash
 # Safe testing with new CSV files
-python add_albums_to_lidarr.py new_albums.csv --dry-run --max-items 20
-python add_albums_to_lidarr.py new_albums.csv --max-items 50 --log-file test_new.log
+py -3 add_albums_to_lidarr.py new_albums.csv --dry-run --max-items 20
+py -3 add_albums_to_lidarr.py new_albums.csv --max-items 50 --log-file test_new.log
 ```
 
 ## ⚠️ **Production Safety Tips**
@@ -196,16 +196,16 @@ python add_albums_to_lidarr.py new_albums.csv --max-items 50 --log-file test_new
 
 ```bash
 # Monday: Process weekend discoveries (conservative)
-python add_albums_to_lidarr.py weekend_finds.csv --max-items 100 --log-file monday.log
+py -3 add_albums_to_lidarr.py weekend_finds.csv --max-items 100 --log-file monday.log
 
 # Wednesday: Continue large import (completed items automatically skipped)  
-python add_albums_to_lidarr.py large_import.csv --max-items 300 --log-file wed.log
+py -3 add_albums_to_lidarr.py large_import.csv --max-items 300 --log-file wed.log
 
 # Friday: Fast processing of curated list (aggressive)
-python add_albums_to_lidarr.py priority.csv --skip-existing --no-batch-pause --max-items 200
+py -3 add_albums_to_lidarr.py priority.csv --skip-existing --no-batch-pause --max-items 200
 
 # Sunday: Retry anything that failed during the week
-python add_albums_to_lidarr.py weekly.csv --status failed --log-file sunday_retry.log
+py -3 add_albums_to_lidarr.py weekly.csv --status failed --log-file sunday_retry.log
 ```
 
 ---
@@ -220,10 +220,10 @@ alias lidarr-test-code-cov="pytest --cov=lib --cov-report=html --cov-report=term
 alias lidarr-test-code-fast="pytest -x"
 
 # Script Testing & Production
-alias lidarr-test="python add_albums_to_lidarr.py --dry-run --max-items 10"
-alias lidarr-daily="python add_albums_to_lidarr.py --max-items 200"
-alias lidarr-retry="python add_albums_to_lidarr.py --status failed --max-items 100"
-alias lidarr-batch="python add_albums_to_lidarr.py --max-items 200 --batch-size 25 --log-file lidarr_$(date +%H%M_%Y%m%d).log"
+alias lidarr-test="py -3 add_albums_to_lidarr.py --dry-run --max-items 10"
+alias lidarr-daily="py -3 add_albums_to_lidarr.py --max-items 200"
+alias lidarr-retry="py -3 add_albums_to_lidarr.py --status failed --max-items 100"
+alias lidarr-batch="py -3 add_albums_to_lidarr.py --max-items 200 --batch-size 25 --log-file lidarr_$(date +%H%M_%Y%m%d).log"
 ```
 
 ```powershell
@@ -244,17 +244,17 @@ function lidarr-test-code-unit {
 
 # Script Testing & Production
 function lidarr-test { 
-    python add_albums_to_lidarr.py $args --dry-run --max-items 10 
+    py -3 add_albums_to_lidarr.py $args --dry-run --max-items 10 
 }
 function lidarr-daily { 
-    python add_albums_to_lidarr.py $args --max-items 200 
+    py -3 add_albums_to_lidarr.py $args --max-items 200 
 }
     function lidarr-retry { 
-    python add_albums_to_lidarr.py $args --status failed --max-items 100 
+    py -3 add_albums_to_lidarr.py $args --status failed --max-items 100 
 }
 function lidarr-batch { 
     $timestamp = Get-Date -Format "HHmm_yyyyMMdd"
-    python add_albums_to_lidarr.py $args --max-items 200 --batch-size 25 --log-file "lidarr_$timestamp.log"
+    py -3 add_albums_to_lidarr.py $args --max-items 200 --batch-size 25 --log-file "lidarr_$timestamp.log"
 }
 ```
 
@@ -315,7 +315,7 @@ If you see "⚠️ No MusicBrainz data" messages:
 ```powershell
 function lidarr-batch {
     $timestamp = Get-Date -Format "HHmm_yyyyMMdd"
-    python add_albums_to_lidarr.py $args --max-items 200 --batch-size 25 --log-file "lidarr_$timestamp.log"
+    py -3 add_albums_to_lidarr.py $args --max-items 200 --batch-size 25 --log-file "lidarr_$timestamp.log"
 }
 ```
 

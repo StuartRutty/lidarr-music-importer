@@ -14,9 +14,9 @@ FEATURES:
 - Detailed logging of all changes made
 
 USAGE:
-    python normalize_album_titles.py albums.csv
-    python normalize_album_titles.py albums.csv --dry-run
-    python normalize_album_titles.py albums.csv --status-filter pending_refresh,skip_no_musicbrainz
+    py -3 normalize_album_titles.py albums.csv
+    py -3 normalize_album_titles.py albums.csv --dry-run
+    py -3 normalize_album_titles.py albums.csv --status-filter pending_refresh,skip_no_musicbrainz
 
 The script will:
 1. Create a backup: albums_backup_YYYYMMDD_HHMMSS.csv
@@ -36,10 +36,10 @@ QUICK ALIAS (optional):
     following to your shell (replace /path/to/repo):
 
     PowerShell (add to $PROFILE):
-        function nat { python "C:\\path\\to\\repo\\scripts\\normalize_album_titles.py" @args }
+        function nat { py -3 "C:\\path\\to\\repo\\scripts\\normalize_album_titles.py" @args }
 
     Bash (add to ~/.bashrc):
-        alias nat='python /path/to/repo/scripts/normalize_album_titles.py'
+        alias nat='py -3 /path/to/repo/scripts/normalize_album_titles.py'
 """
 
 import csv

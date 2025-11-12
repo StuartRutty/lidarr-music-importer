@@ -172,14 +172,14 @@ def main():
 QUICK ALIAS (optional):
   Add a short wrapper if you like (replace /path/to/repo):
 
-  PowerShell (add to $PROFILE):
-    function ps2pairs { python "C:\\path\\to\\repo\\scripts\\parse_spotify_for_lidarr.py" @args }
+    PowerShell (add to $PROFILE):
+        function ps2pairs { py -3 "C:\\path\\to\\repo\\scripts\\parse_spotify_for_lidarr.py" @args }
 
-  Bash (add to ~/.bashrc):
-    alias ps2pairs='python /path/to/repo/scripts/parse_spotify_for_lidarr.py'
+    Bash (add to ~/.bashrc):
+        alias ps2pairs='py -3 /path/to/repo/scripts/parse_spotify_for_lidarr.py'
 
 Run directly:
-  python scripts/parse_spotify_for_lidarr.py my_spotify_export.csv
+    py -3 scripts/parse_spotify_for_lidarr.py my_spotify_export.csv
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )

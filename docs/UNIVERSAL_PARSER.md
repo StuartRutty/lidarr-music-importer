@@ -77,7 +77,7 @@ Drake	Views
 ### Basic Usage
 ```bash
 # Auto-detect format and parse
-python universal_parser.py input.csv
+py -3 universal_parser.py input.csv
 
 # Outputs: albums.csv (ready for add_albums_to_lidarr.py)
 ```
@@ -85,39 +85,39 @@ python universal_parser.py input.csv
 ### Spotify Export with Filtering
 ```bash
 # Filter out artists with <3 songs and albums with <2 songs
-python universal_parser.py spotify_export.csv --min-artist-songs 3 --min-album-songs 2
+py -3 universal_parser.py spotify_export.csv --min-artist-songs 3 --min-album-songs 2
 ```
 
 ### Custom Fuzzy Threshold
 ```bash
 # More aggressive deduplication (90% similarity merges entries)
-python universal_parser.py my_list.txt --fuzzy-threshold 90
+py -3 universal_parser.py my_list.txt --fuzzy-threshold 90
 
 # Disable fuzzy matching (exact matches only)
-python universal_parser.py my_list.txt --fuzzy-threshold 100
+py -3 universal_parser.py my_list.txt --fuzzy-threshold 100
 ```
 
 ### Preview Mode
 ```bash
 # Dry run - see what would be parsed without creating output
-python universal_parser.py input.csv --dry-run
+py -3 universal_parser.py input.csv --dry-run
 ```
 
 ### Skip Normalization
 ```bash
 # Keep original formatting (no cleaning)
-python universal_parser.py input.csv --no-normalize
+py -3 universal_parser.py input.csv --no-normalize
 ```
 
 ### Custom Output File
 ```bash
-python universal_parser.py input.csv -o my_albums.csv
+py -3 universal_parser.py input.csv -o my_albums.csv
 ```
 
 ### Verbose Mode
 ```bash
 # Show detailed debug logging
-python universal_parser.py input.csv -v
+py -3 universal_parser.py input.csv -v
 ```
 
 ## Fuzzy Matching Examples
@@ -195,10 +195,10 @@ After parsing, use the output directly:
 
 ```bash
 # 1. Parse and normalize your data
-python universal_parser.py spotify_export.csv
+py -3 universal_parser.py spotify_export.csv
 
 # 2. Import to Lidarr
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 ```
 
 ## Command Line Options
@@ -224,7 +224,7 @@ options:
 Run the test suite to verify all format parsers:
 
 ```bash
-python test_universal_parser.py
+py -3 -m pytest tests/test_universal_parser.py
 ```
 
 Tests include:
@@ -241,10 +241,10 @@ Tests include:
 ```bash
 # Export your Spotify liked songs to CSV
 # Parse with filtering
-python universal_parser.py spotify_liked_songs.csv --min-artist-songs 3
+py -3 universal_parser.py spotify_liked_songs.csv --min-artist-songs 3
 
 # Import to Lidarr
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 ```
 
 ### Workflow 2: Manual Copy-Paste List
@@ -253,20 +253,20 @@ python add_albums_to_lidarr.py albums.csv
 # Format: "Artist - Album" (one per line)
 
 # Parse and clean
-python universal_parser.py my_manual_list.txt
+py -3 universal_parser.py my_manual_list.txt
 
 # Import to Lidarr
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 ```
 
 ### Workflow 3: Existing CSV Cleanup
 ```bash
 # You have a messy CSV with duplicates and variations
-python universal_parser.py messy_data.csv --fuzzy-threshold 90 -o cleaned.csv
+py -3 universal_parser.py messy_data.csv --fuzzy-threshold 90 -o cleaned.csv
 
 # Review the statistics to see what was merged
 # Then import
-python add_albums_to_lidarr.py cleaned.csv
+py -3 add_albums_to_lidarr.py cleaned.csv
 ```
 
 ## Troubleshooting
@@ -295,20 +295,20 @@ python add_albums_to_lidarr.py cleaned.csv
 
 ```bash
 # Parse → Normalize titles → Clean → Import
-python universal_parser.py spotify.csv
-python normalize_album_titles.py albums.csv
-python clean_albums.py
-python add_albums_to_lidarr.py albums.csv
+py -3 universal_parser.py spotify.csv
+py -3 normalize_album_titles.py albums.csv
+py -3 clean_albums.py
+py -3 add_albums_to_lidarr.py albums.csv
 ```
 
 ### Filter output programmatically
 
 ```bash
 # Parse everything first
-python universal_parser.py all_music.csv
+py -3 universal_parser.py all_music.csv
 
 # Then filter with add_albums_to_lidarr.py options
-python add_albums_to_lidarr.py albums.csv --artist "Kendrick"
+py -3 add_albums_to_lidarr.py albums.csv --artist "Kendrick"
 ```
 
 ## Dependencies
@@ -319,7 +319,7 @@ python add_albums_to_lidarr.py albums.csv --artist "Kendrick"
 
 Install dependencies:
 ```bash
-pip install rapidfuzz
+py -3 -m pip install rapidfuzz
 ```
 
 ## Related Tools

@@ -101,7 +101,7 @@ Comprehensive test suite added: `tests/test_csv_cleaning.py`
 - ✅ 6/6 edge case tests passed
 - ✅ Real-world examples validated
 
-Run tests: `python tests/test_csv_cleaning.py`
+Run tests: `py -3 -m pytest tests/test_csv_cleaning.py`
 
 ## Technical Details
 
@@ -129,12 +129,12 @@ The cleaning is **automatic** and requires no code changes for normal use:
 
 ```bash
 # Just run the script as usual - cleaning happens automatically
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 ```
 
 To see what was cleaned, enable debug logging:
 ```bash
-python add_albums_to_lidarr.py albums.csv --log-file import.log
+py -3 add_albums_to_lidarr.py albums.csv --log-file import.log
 ```
 
 Check the log file for messages like:

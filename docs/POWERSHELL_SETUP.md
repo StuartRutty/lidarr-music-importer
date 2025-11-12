@@ -32,7 +32,7 @@ function lidarr-import {
     .EXAMPLE
     lidarr-import albums.csv
     #>
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args
 }
 
 function lidarr-test {
@@ -42,7 +42,7 @@ function lidarr-test {
     .EXAMPLE
     lidarr-test albums.csv
     #>
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --dry-run --max-items 5
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --dry-run --max-items 5
 }
 
 function lidarr-retry {
@@ -52,7 +52,7 @@ function lidarr-retry {
     .EXAMPLE
     lidarr-retry albums.csv
     #>
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status failed
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status failed
 }
 
 function lidarr-refresh {
@@ -62,7 +62,7 @@ function lidarr-refresh {
     .EXAMPLE
     lidarr-refresh albums.csv
     #>
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status pending_refresh
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status pending_refresh
 }
 
 function lidarr-artist {
@@ -76,7 +76,7 @@ function lidarr-artist {
         Write-Host "Usage: lidarr-artist <csv> <artist_name>" -ForegroundColor Yellow
         return
     }
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --artist $args[1]
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --artist $args[1]
 }
 
 function lidarr-quick {
@@ -86,7 +86,7 @@ function lidarr-quick {
     .EXAMPLE
     lidarr-quick albums.csv
     #>
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --skip-existing --no-batch-pause
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --skip-existing --no-batch-pause
 }
 
 function lidarr-help {
@@ -110,7 +110,7 @@ function lidarr-help {
     Write-Host "  lidarr-help                  " -ForegroundColor Green -NoNewline
     Write-Host "- Show this help message"
     Write-Host "`nFor full script help, run:" -ForegroundColor Cyan
-    Write-Host "  python add_albums_to_lidarr.py --help`n"
+    Write-Host "  py -3 add_albums_to_lidarr.py --help`n"
 }
 
 Write-Host "Lidarr shortcuts loaded! Type 'lidarr-help' for available commands." -ForegroundColor Green
@@ -217,7 +217,7 @@ You can add your own shortcuts to the profile:
 
 ```powershell
 function lidarr-myworkflow {
-    python "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status pending_refresh --max-items 10
+    py -3 "$lidarrScriptPath\add_albums_to_lidarr.py" $args[0] --status pending_refresh --max-items 10
 }
 ```
 

@@ -26,13 +26,13 @@ Quick usage (examples)
 1. Parse an input file (auto-detect format):
 
 ```cmd
-python scripts\universal_parser.py examples\sample_spotify.csv
+py -3 scripts\universal_parser.py examples\sample_spotify.csv
 ```
 
 2. Dry-run an import (safe test against your Lidarr instance):
 
 ```cmd
-python scripts\add_albums_to_lidarr.py albums.csv --dry-run --max-items 5
+py -3 scripts\add_albums_to_lidarr.py albums.csv --dry-run --max-items 5
 ```
 
 Notes

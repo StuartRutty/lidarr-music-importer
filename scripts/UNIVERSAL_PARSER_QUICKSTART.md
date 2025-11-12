@@ -8,13 +8,13 @@
 
 ### Example 1: Parse a Spotify Export
 ```bash
-python universal_parser.py spotify_export.csv
+py -3 universal_parser.py spotify_export.csv
 # Output: albums.csv (filtered and cleaned)
 ```
 
 ### Example 2: Parse a Manual List
 Create a text file `my_music.txt`:
-```
+ py -3 universal_parser.py spotify_export.csv
 Kendrick Lamar - DAMN.
 Drake - Views
 The Weeknd - Starboy
@@ -22,13 +22,13 @@ The Weeknd - Starboy
 
 Parse it:
 ```bash
-python universal_parser.py my_music.txt
+py -3 universal_parser.py my_music.txt
 # Output: albums.csv
 ```
 
 ### Example 3: Parse a Simple CSV
 Create `music.csv`:
-```csv
+ py -3 universal_parser.py my_music.txt
 artist,album
 Kendrick Lamar,DAMN.
 Drake,Views
@@ -36,153 +36,126 @@ Drake,Views
 
 Parse it:
 ```bash
-python universal_parser.py music.csv
+py -3 universal_parser.py music.csv
 # Output: albums.csv
 ```
 
 ## What Gets Cleaned
+````markdown
+# Universal Parser - Quick Start Guide
 
-### Exact Duplicates Removed
-- `Drake, Views` (line 1)
-- `Drake, Views` (line 2)
-→ **Merged into one entry**
+## What It Does
 
-### Fuzzy Duplicates Merged (85% similarity threshold)
-- `DAMN.`
-- `DAMN. (Deluxe Edition)`
-→ **Merged into: `DAMN.`**
+The Universal Parser auto-detects common input formats (Spotify CSV, plain CSV, or simple text lists) and outputs a cleaned `albums.csv` suitable for Lidarr import.
 
-- `Views`
-- `Views (Deluxe)`
-→ **Merged into: `Views`**
+## Quick Examples
 
-### Whitespace Cleaned
-- `  Drake  ` → `Drake`
-- `  Views  (Deluxe)  ` → `Views (Deluxe)`
+### Parse a Spotify export
+```bash
+py -3 universal_parser.py spotify_export.csv
+# produces: albums.csv
+```
 
-### Special Characters Normalized
-- `Ol' Burger Beats` → `Ol' Burger Beats` (proper apostrophe)
-- `F*ck Love` → `F*ck Love` (preserved)
+### Parse a simple text list
+Create `my_music.txt` with one album per line in the form `Artist - Album`:
+```
+Kendrick Lamar - DAMN.
+Drake - Views
+The Weeknd - Starboy
+```
+
+Then run:
+```bash
+py -3 universal_parser.py my_music.txt
+# produces: albums.csv
+```
+
+### Parse a CSV with headers
+Create `music.csv`:
+```csv
+artist,album
+Kendrick Lamar,DAMN.
+Drake,Views
+```
+
+Then run:
+```bash
+py -3 universal_parser.py music.csv
+# produces: albums.csv
+```
 
 ## Common Options
 
 ```bash
-# Preview without creating files
-python universal_parser.py input.csv --dry-run
+# Preview only (no file written)
+py -3 universal_parser.py input.csv --dry-run
 
 # Custom output filename
-python universal_parser.py input.csv -o my_albums.csv
+py -3 universal_parser.py input.csv -o my_albums.csv
 
-# More aggressive deduplication
-python universal_parser.py input.csv --fuzzy-threshold 90
+# Verbose debugging
+py -3 universal_parser.py input.csv -v
 
-# Disable fuzzy matching (exact only)
-python universal_parser.py input.csv --fuzzy-threshold 100
+# Disable fuzzy merging (exact-only)
+py -3 universal_parser.py input.csv --fuzzy-threshold 100
 
-# Keep original formatting (no cleaning)
-python universal_parser.py input.csv --no-normalize
+# Skip normalization / keep original formatting
+py -3 universal_parser.py input.csv --no-normalize
 
-# Spotify: filter minimum tracks
-python universal_parser.py spotify.csv --min-artist-songs 5 --min-album-songs 3
+# Spotify-specific filters: keep artists/albums with minimum track counts
+py -3 universal_parser.py spotify.csv --min-artist-songs 5 --min-album-songs 3
 ```
 
-## Complete Workflow
+## Workflow
+
+1. Parse your raw data:
 
 ```bash
-# Step 1: Parse your data
-python universal_parser.py my_music_list.txt
+py -3 universal_parser.py my_music_list.txt
+```
 
-# Step 2: (Optional) Normalize album titles further
-python normalize_album_titles.py albums.csv
+2. (Optional) Inspect `albums.csv` and make adjustments.
 
-# Step 3: Import to Lidarr
-python add_albums_to_lidarr.py albums.csv
+3. Import into Lidarr:
+
+```bash
+py -3 add_albums_to_lidarr.py albums.csv
+```
+
+Run the test suite for the parser:
+```bash
+py -3 -m pytest tests/test_universal_parser.py
 ```
 
 ## Supported Input Formats
 
-| Format | Example | Auto-Detected? |
-|--------|---------|----------------|
-| Spotify CSV | `Track Name,Artist Name(s),...` | ✅ Yes |
-| CSV with headers | `artist,album` | ✅ Yes |
-| CSV without headers | `Drake,Views` | ✅ Yes |
-| Text: Artist - Album | `Drake - Views` | ✅ Yes |
-| Text: Album by Artist | `Views by Drake` | ✅ Yes |
-| Tab-separated | `Drake⇥Views` | ✅ Yes |
+| Format | Example | Auto-detected |
+|--------|---------|---------------|
+| Spotify CSV | `Track Name,Artist Name(s),...` | ✅ |
+| CSV with headers | `artist,album` | ✅ |
+| CSV without headers | `Drake,Views` | ✅ |
+| Text: `Artist - Album` | `Drake - Views` | ✅ |
+| Text: `Album by Artist` | `Views by Drake` | ✅ |
+| Tab-separated | `Drake\tViews` | ✅ |
 
 ## Troubleshooting
 
-### "No valid entries found"
-- Check file encoding (should be UTF-8)
-- Ensure you have 2 columns (artist & album)
-- Try: `python universal_parser.py input.csv -v` for debug info
-
-### Too many albums merged
-- Increase fuzzy threshold: `--fuzzy-threshold 95`
-
-### Not enough duplicates removed
-- Lower fuzzy threshold: `--fuzzy-threshold 80`
-
-### Wrong columns detected
-- Add headers to your CSV: `artist,album`
-- Or use explicit formatting: `Artist - Album` per line
-
-## Output Statistics
-
-Example output:
-```
-📊 PARSING STATISTICS
-======================================================================
-Format detected:       text_dash
-Raw entries parsed:    100
-Exact duplicates:      15
-Fuzzy duplicates:      8
-
-✨ Final unique pairs:  77
-======================================================================
-```
-
-This means:
-- Started with 100 entries
-- Removed 15 exact duplicates
-- Merged 8 fuzzy duplicates
-- Final clean output: 77 unique albums
+- "No valid entries found": ensure file encoding is UTF-8 and each row contains artist and album columns or uses an accepted text format.
+- If too many albums are merged, raise `--fuzzy-threshold`.
+- If duplicates remain, lower `--fuzzy-threshold` slightly.
 
 ## Tips
 
-💡 **Always do a dry run first**
-```bash
-python universal_parser.py input.csv --dry-run
-```
+- Always run a dry run first: `py -3 universal_parser.py input.csv --dry-run`.
+- Use `-v` to get debug output explaining why lines were accepted/filtered.
+- Test with a small sample before processing your full library.
 
-💡 **Use verbose mode to understand what's happening**
-```bash
-python universal_parser.py input.csv -v
-```
+## See also
 
-💡 **For Spotify exports, adjust filters to your preference**
-```bash
+- Full docs: `docs/UNIVERSAL_PARSER.md`
+- Parser utilities: `lib/text_utils.py`
+
+Run `py -3 universal_parser.py --help` for the full list of options.
+
+````
 # Only include artists with 5+ songs, albums with 3+ songs
-python universal_parser.py spotify.csv --min-artist-songs 5 --min-album-songs 3
-```
-
-💡 **Test with a small sample first**
-```bash
-# Create a small test file with 10 entries
-# Run the parser
-# Verify the output looks good
-# Then process your full dataset
-```
-
-## See Also
-
-- Full documentation: `docs/UNIVERSAL_PARSER.md`
-- Test suite: `python test_universal_parser.py`
-- Text utilities: `lib/text_utils.py`
-
-## Need Help?
-
-Run with `--help` for all options:
-```bash
-python universal_parser.py --help
-```

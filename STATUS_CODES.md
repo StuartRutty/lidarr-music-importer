@@ -51,26 +51,26 @@ These statuses indicate temporary issues that may resolve with retry. Use `--sta
 ### Initial Import
 ```bash
 # Process all items (automatically skips completed on subsequent runs)
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 
 # Test first 5 items
-python add_albums_to_lidarr.py albums.csv --dry-run --max-items 5
+py -3 add_albums_to_lidarr.py albums.csv --dry-run --max-items 5
 ```
 
 ### Resume Interrupted Import
 ```bash
 # Skip completed and permanent failures, process pending/errors only (default behavior)
-python add_albums_to_lidarr.py albums.csv
+py -3 add_albums_to_lidarr.py albums.csv
 
 # Process ALL items including completed ones
-python add_albums_to_lidarr.py albums.csv --no-skip-completed
+py -3 add_albums_to_lidarr.py albums.csv --no-skip-completed
 ```
 
 ### Retry Failed Items
 ```bash
 # Process only error states and pending states
 # Use the new tokenized --status flag. Use the special token 'failed' to select retryable items.
-python add_albums_to_lidarr.py albums.csv --status failed
+py -3 add_albums_to_lidarr.py albums.csv --status failed
 ```
 
 ### Status-Specific Processing
@@ -86,13 +86,13 @@ After running the script, check your CSV file. You can filter by status to under
 ### Handling Pending Items
 If you see items with `pending_refresh` status:
 1. Wait 5-10 minutes for Lidarr to refresh artist metadata
-2. Run: `python add_albums_to_lidarr.py albums.csv` (completed items automatically skipped)
+2. Run: `py -3 add_albums_to_lidarr.py albums.csv` (completed items automatically skipped)
 
 ### Fixing Connection Issues  
 If you see many `error_connection` items:
 1. Check your network connection to Lidarr
 2. Verify Lidarr is running and accessible
-3. Run: `python add_albums_to_lidarr.py albums.csv --status failed`
+3. Run: `py -3 add_albums_to_lidarr.py albums.csv --status failed`
 
 ## Filtering with --status / --not-status
 
@@ -106,13 +106,13 @@ Examples:
 
 ```bash
 # Select items that are pending or errored
-python add_albums_to_lidarr.py albums.csv --status pending_refresh,error_connection
+py -3 add_albums_to_lidarr.py albums.csv --status pending_refresh,error_connection
 
 # Select only rows that have no status (new items)
-python add_albums_to_lidarr.py albums.csv --status new
+py -3 add_albums_to_lidarr.py albums.csv --status new
 
 # Exclude already_monitored and skip_no_musicbrainz
-python add_albums_to_lidarr.py albums.csv --not-status already_monitored,skip_no_musicbrainz
+py -3 add_albums_to_lidarr.py albums.csv --not-status already_monitored,skip_no_musicbrainz
 ```
 
 ### MusicBrainz Issues

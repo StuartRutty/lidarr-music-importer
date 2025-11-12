@@ -234,7 +234,7 @@ ERROR: MusicBrainz request failed: Connection aborted
 
 1. **Run your import:**
    ```bash
-   python add_albums_to_lidarr.py albums.csv
+   py -3 add_albums_to_lidarr.py albums.csv
    ```
 
 2. **Monitor the logs:** Watch for 🔍📝✅ indicators

@@ -13,14 +13,14 @@ Quick requirements
 - Install dependencies:
 
 ```cmd
-pip install -r requirements.txt
+py -3 -m pip install -r requirements.txt
 ```
 
 Setup (local)
 1. Create and activate a virtual environment (Windows):
 
 ```cmd
-python -m venv .venv
+py -3 -m venv .venv
 .venv\Scripts\activate
 ```
 
@@ -35,26 +35,26 @@ Usage (examples)
 - Parse an input file (auto-detect format) and write an enriched CSV:
 
 ```cmd
-python scripts\universal_parser.py examples\sample_spotify.csv
+py -3 scripts\universal_parser.py examples\sample_spotify.csv
 ```
 
 - Dry-run import (test without changing Lidarr):
 
 ```cmd
-python scripts\add_albums_to_lidarr.py albums.csv --dry-run --max-items 10
+py -3 scripts\add_albums_to_lidarr.py albums.csv --dry-run --max-items 10
 ```
 
 - Full import:
 
 ```cmd
-python scripts\add_albums_to_lidarr.py albums.csv
+py -3 scripts\add_albums_to_lidarr.py albums.csv
 ```
 
 Testing
 - Run unit tests locally:
 
 ```cmd
-pytest -q
+py -3 -m pytest -q
 ```
 
 CI

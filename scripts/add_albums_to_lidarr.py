@@ -1165,48 +1165,48 @@ def main():
         description="Add albums to Lidarr from artist/album CSV",
         epilog="""
 USAGE EXAMPLES:
-  # Basic import (skips completed items by default)
-  python add_albums_to_lidarr.py my_albums.csv
+    # Basic import (skips completed items by default)
+    py -3 add_albums_to_lidarr.py my_albums.csv
   
   # Process ALL items including completed ones
-  python add_albums_to_lidarr.py my_albums.csv --no-skip-completed
+    py -3 add_albums_to_lidarr.py my_albums.csv --no-skip-completed
   
   # Test first 5 items without making changes
-  python add_albums_to_lidarr.py my_albums.csv --dry-run --max-items 5
+    py -3 add_albums_to_lidarr.py my_albums.csv --dry-run --max-items 5
   
   # Resume interrupted import, skipping completed items  
-  python add_albums_to_lidarr.py my_albums.csv --skip-completed
+    py -3 add_albums_to_lidarr.py my_albums.csv --skip-completed
   
   # Process only albums by a specific artist
-  python add_albums_to_lidarr.py my_albums.csv --artist "Kanye West"
+    py -3 add_albums_to_lidarr.py my_albums.csv --artist "Kanye West"
   
   # Process only albums matching a title
-  python add_albums_to_lidarr.py my_albums.csv --album "Deluxe"
+    py -3 add_albums_to_lidarr.py my_albums.csv --album "Deluxe"
   
   # Process only items with specific status
-    python add_albums_to_lidarr.py my_albums.csv --status pending_refresh
+    py -3 add_albums_to_lidarr.py my_albums.csv --status pending_refresh
   
   # Process only 100 items with logging to file
-  python add_albums_to_lidarr.py my_albums.csv --max-items 100 --log-file import.log
+    py -3 add_albums_to_lidarr.py my_albums.csv --max-items 100 --log-file import.log
   
   # Fast processing: skip existing artists, no batch pauses
-  python add_albums_to_lidarr.py my_albums.csv --skip-existing --no-batch-pause
+    py -3 add_albums_to_lidarr.py my_albums.csv --skip-existing --no-batch-pause
   
         # Retry only failed items with detailed logging (use --status failed)
-            python add_albums_to_lidarr.py my_albums.csv --status failed --log-file retry.log
+            py -3 add_albums_to_lidarr.py my_albums.csv --status failed --log-file retry.log
 
 QUICK ALIAS (optional):
     To create a short shortcut for interactive use, add a small wrapper to your shell.
     Replace the example path with the correct path to this repository.
 
     PowerShell (persist by adding to your $PROFILE):
-        function lidarr { python "C:\\path\\to\\repo\\scripts\\add_albums_to_lidarr.py" @args }
+        function lidarr { py -3 "C:\\path\\to\\repo\\scripts\\add_albums_to_lidarr.py" @args }
 
     Bash (add to ~/.bashrc or ~/.profile):
-        alias lidarr='python /path/to/repo/scripts/add_albums_to_lidarr.py'
+    alias lidarr='py -3 /path/to/repo/scripts/add_albums_to_lidarr.py'
 
     Note: these are optional convenience snippets. To run directly:
-        python scripts/add_albums_to_lidarr.py my_albums.csv
+        py -3 scripts/add_albums_to_lidarr.py my_albums.csv
                 """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
