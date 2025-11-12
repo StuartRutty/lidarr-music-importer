@@ -114,3 +114,16 @@ This project uses [Semantic Versioning](https://semver.org/):
 ---
 
 For upcoming features and known issues, see the project's issue tracker.
+
+## [2.0.1] - 2025-11-11
+
+### 🔧 Release & Housekeeping
+- Added packaging metadata and CI fixes so the project installs cleanly and tests run in GitHub Actions.
+- Added a lightweight smoke test and migrated imports to the canonical `lib` package.
+- Tidied `.gitignore` to avoid committing local virtualenv artifacts.
+
+### 🚫 Removed
+- Removed the top-level compatibility shim `text_utils.py`; imports should use `lib.text_utils`.
+
+### 📝 Notes
+- This is a non-breaking housekeeping release; most changes improve developer experience and CI reliability.

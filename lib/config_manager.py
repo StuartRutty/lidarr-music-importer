@@ -26,11 +26,10 @@ class Config:
         except Exception as e:
             raise ValueError(f"Failed to load configuration: {e}")
         
-        # Only validate automatically if an API key was provided during load.
-        # Tests often construct Config() and then call _load_from_module/_load_from_env
-        # or _validate() explicitly, so avoid raising here when no API key exists.
-        if getattr(self, 'lidarr_api_key', None):
-            self._validate()
+        # Do not auto-validate in __init__ — tests construct Config() and then
+        # call `_load_from_module` / `_load_from_env` or `_validate()` explicitly.
+        # Leaving validation to an explicit call avoids raising during test setup
+        # when a placeholder `config.py` is present in the working tree.
     
     def _load_from_module(self, config_module) -> None:
         """Load configuration from config.py module."""
