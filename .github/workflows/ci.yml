@@ -109,11 +109,21 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
 
-      - name: Quick import check
+      - name: Quick import check (diagnostic)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python - <<'PY'
-          import lib
-          print('lib ok ->', getattr(lib, '__file__', '<no __file__>'))
+          import os, sys, traceback
+          print('cwd:', os.getcwd())
+          print('top-level files:', os.listdir('.'))
+          print('sys.path:\n', '\n'.join(sys.path))
+          try:
+              import lib
+              print('lib ok ->', getattr(lib, '__file__', '<no __file__>'))
+          except Exception as e:
+              print('lib import failed:', e)
+              traceback.print_exc()
           PY
 
       - name: Run small smoke test set
