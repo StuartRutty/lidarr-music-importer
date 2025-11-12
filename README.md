@@ -32,6 +32,8 @@ rem Edit config.py: set LIDARR_BASE_URL and LIDARR_API_KEY
 ```
 
 Usage (examples)
+- Quickstart: see `docs/QUICKSTART.md` for a one-page walk-through (install, config, example run).
+
 - Parse an input file (auto-detect format) and write an enriched CSV:
 
 ```cmd
@@ -104,6 +106,14 @@ rem open config.py in an editor and update MUSICBRAINZ_USER_AGENT['contact'] and
 ```
 
 If you'd like, I can also add a short checklist and sample `.env` example (gitignored) to the repo to make onboarding easier.
+
+Documentation
+-------------
+
+- Canonical usage & production guide: `docs/USAGE_AND_PRODUCTION.md` (consolidated from previous usage/production guides)
+- Parser internals and enhanced MusicBrainz search: `docs/UNIVERSAL_PARSER.md`
+- Quickstart (one-page): `docs/QUICKSTART.md`
+- Archived legacy docs: `docs/archive/` (historical copies)
 
 Parser behavior note
 --------------------

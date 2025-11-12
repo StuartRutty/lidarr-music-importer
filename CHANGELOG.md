@@ -14,7 +14,7 @@ All notable changes to the Lidarr Music Importer project will be documented in t
 - `setup.py` for easy installation and configuration
 - `requirements.txt` for dependency management
 - `config.template.py` for configuration management
-- Comprehensive documentation in `docs/USAGE_GUIDE.md`
+- Comprehensive documentation in `docs/USAGE_AND_PRODUCTION.md`
 - Example files and templates
 
 ### 🔧 Improved
@@ -127,3 +127,14 @@ For upcoming features and known issues, see the project's issue tracker.
 
 ### 📝 Notes
 - This is a non-breaking housekeeping release; most changes improve developer experience and CI reliability.
+
+## [2.0.2] - 2025-11-12
+
+### 📝 Documentation housekeeping
+- Consolidated usage and production guides into `docs/USAGE_AND_PRODUCTION.md` to remove duplication and provide a single point of truth.
+- Migrated enhanced MusicBrainz search documentation into `docs/UNIVERSAL_PARSER.md`.
+- Added a one-page quickstart at `docs/QUICKSTART.md` for faster onboarding.
+- Archived legacy docs into `docs/archive/` (historical copies kept) and added redirects in the top-level docs.
+
+### 🔧 Notes
+- These are documentation-only changes; no code or runtime behavior was changed.

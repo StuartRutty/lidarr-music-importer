@@ -1,3 +1,12 @@
+<!-- Consolidated Usage + Production guide (merged from PRODUCTION_GUIDE.md and USAGE_GUIDE.md) -->
+# Usage & Production Guide - Lidarr Music Importer
+
+This consolidated document combines the previous `PRODUCTION_GUIDE.md` and `USAGE_GUIDE.md` into a single reference covering common usage, configuration, and production workflows.
+
+---
+
+<!-- Begin: content from PRODUCTION_GUIDE.md -->
+
 # 🚀 Production Flags Guide - Lidarr Music Importer
 
 **Version 2.0** - Updated for new configuration system
@@ -12,9 +21,17 @@ Before running production imports, set up your configuration:
 
 ### Method 1: Config File (Recommended)
 ```bash
-# Copy template and edit with your settings
-cp config_template.py config.py
-nano config.py  # or use your editor
+# Copy template and edit with your settings (cross-platform)
+# Unix / macOS:
+cp config.template.py config.py
+# Windows (cmd.exe):
+:: copy config.template.py config.py
+# Windows (PowerShell):
+Copy-Item -Path .\config.template.py -Destination .\config.py
+
+# Edit the file with your preferred editor (example):
+# Windows: notepad config.py
+# Unix: nano config.py
 
 # Verify configuration loads
 py -3 -c "from lib.config import Config; print(Config())"
@@ -30,10 +47,10 @@ export ROOT_FOLDER_PATH="/media/Music"
 # Windows PowerShell
 $env:LIDARR_BASE_URL="http://192.168.1.225:8686"
 $env:LIDARR_API_KEY="your-api-key"
-$env:ROOT_FOLDER_PATH="T:\Music"
+$env:ROOT_FOLDER_PATH="T:\\Music"
 ```
 
-**See [QUICKSTART_REFACTORING.md](../QUICKSTART_REFACTORING.md) for detailed setup instructions.**
+See `UNIVERSAL_PARSER.md` or the project `README.md` for detailed setup/quickstart instructions.
 
 ---
 
@@ -67,8 +84,6 @@ py -3 add_albums_to_lidarr.py albums.csv --no-skip-completed
 # Daily processing quota (skips completed by default)
 py -3 add_albums_to_lidarr.py albums.csv --max-items 200
 ```
-
-**💡 Tip**: Default behavior skips completed items. Use `--no-skip-completed` only when you need to reprocess everything.
 
 ### `--skip-existing` 
 Skip artists already in Lidarr (faster processing)
@@ -179,7 +194,7 @@ py -3 add_albums_to_lidarr.py new_albums.csv --max-items 50 --log-file test_new.
 1. **Always start small**: Use `--max-items 50` for new datasets
 2. **Use logging**: Always use `--log-file` for production runs
 3. **Monitor your API**: Watch Lidarr logs during runs
-5. **Resume safely**: Default behavior skips completed items automatically
+4. **Resume safely**: Default behavior skips completed items automatically
 5. **Test first**: Use `--dry-run` when unsure
 
 ## 📈 **Performance Guidelines**
@@ -210,133 +225,160 @@ py -3 add_albums_to_lidarr.py weekly.csv --status failed --log-file sunday_retry
 
 ---
 
-**💡 Pro Tip**: Create shell aliases for common patterns:
+<!-- End: content from PRODUCTION_GUIDE.md -->
 
-```bash
-# Add to your .bashrc / PowerShell profile
-# Testing & Development
-alias lidarr-test-code="pytest -v"
-alias lidarr-test-code-cov="pytest --cov=lib --cov-report=html --cov-report=term"
-alias lidarr-test-code-fast="pytest -x"
-
-# Script Testing & Production
-alias lidarr-test="py -3 add_albums_to_lidarr.py --dry-run --max-items 10"
-alias lidarr-daily="py -3 add_albums_to_lidarr.py --max-items 200"
-alias lidarr-retry="py -3 add_albums_to_lidarr.py --status failed --max-items 100"
-alias lidarr-batch="py -3 add_albums_to_lidarr.py --max-items 200 --batch-size 25 --log-file lidarr_$(date +%H%M_%Y%m%d).log"
-```
-
-```powershell
-# For PowerShell users, add to your $PROFILE:
-# Testing & Development (pytest)
-function lidarr-test-code { 
-    pytest -v 
-}
-function lidarr-test-code-cov { 
-    pytest --cov=lib --cov-report=html --cov-report=term 
-}
-function lidarr-test-code-fast { 
-    pytest -x  # Stop at first failure
-}
-function lidarr-test-code-unit { 
-    pytest tests/test_text_utils.py -v  # Run specific test file
-}
-
-# Script Testing & Production
-function lidarr-test { 
-    py -3 add_albums_to_lidarr.py $args --dry-run --max-items 10 
-}
-function lidarr-daily { 
-    py -3 add_albums_to_lidarr.py $args --max-items 200 
-}
-    function lidarr-retry { 
-    py -3 add_albums_to_lidarr.py $args --status failed --max-items 100 
-}
-function lidarr-batch { 
-    $timestamp = Get-Date -Format "HHmm_yyyyMMdd"
-    py -3 add_albums_to_lidarr.py $args --max-items 200 --batch-size 25 --log-file "lidarr_$timestamp.log"
-}
-```
-
-**🔧 PowerShell Setup Instructions:**
-1. **Enable Scripts**: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
-2. **Edit Profile**: `notepad $PROFILE` and add the functions above
-3. **Reload Profile**: `. $PROFILE` 
-4. **Functions Available**: Every PowerShell session will now have these commands
-
-**Usage Examples:**
-```bash
-# Linux/macOS - Testing & Development
-lidarr-test-code           # Run all unit tests
-lidarr-test-code-cov       # Run tests with coverage
-lidarr-batch albums.csv    # Production script run
-
-# PowerShell - Testing & Development
-lidarr-test-code           # Run all 89 unit tests
-lidarr-test-code-cov       # Run tests with coverage report
-lidarr-test-code-fast      # Stop at first failure
-lidarr-test-code-unit      # Run specific test module
-
-# PowerShell - Script Testing & Production
-lidarr-test albums.csv     # Test 10 items (dry-run)
-lidarr-daily albums.csv    # Process 200 items  
-lidarr-retry albums.csv    # Retry failures only
-lidarr-batch albums.csv    # 200 items + timestamped log
-```
-
-**💡 PowerShell Setup & MusicBrainz Troubleshooting**: 
-
-**🔧 Making Functions Permanent:**
-1. **Create/Edit Profile**: Run `notepad $PROFILE` to open your PowerShell profile
-2. **Add Functions**: Copy the functions above and save the file
-3. **Reload Profile**: Run `. $PROFILE` or restart PowerShell
-4. **Test**: Functions will now be available in every PowerShell session
-
-**🚫 MusicBrainz Connection Issues:**
-If you see "⚠️ No MusicBrainz data" messages:
-
-1. **VPN Issues**: MusicBrainz blocks some VPN IPs
-   ```powershell
-   # Test MusicBrainz connectivity
-   Invoke-WebRequest "https://musicbrainz.org/ws/2/artist/?query=kanye+west&fmt=json" -UseBasicParsing
-   ```
-
-2. **Disable MusicBrainz Temporarily**: Edit the script configuration
-   ```python
-   USE_MUSICBRAINZ = False  # Set to False to skip MusicBrainz lookups
-   ```
-
-3. **Check Rate Limiting**: Increase delays in configuration
-   ```python
-   MUSICBRAINZ_DELAY = 3.0  # Increase from 2.0 to 3.0 seconds
-   ```
-
-**Correct PowerShell function:**
-```powershell
-function lidarr-batch {
-    $timestamp = Get-Date -Format "HHmm_yyyyMMdd"
-    py -3 add_albums_to_lidarr.py $args --max-items 200 --batch-size 25 --log-file "lidarr_$timestamp.log"
-}
-```
-
-```
-
-This creates log files like: `lidarr_1430_20251109.log` (2:30 PM on Nov 9, 2025)
 
 ---
 
-## 📚 Additional Resources
+<!-- Begin: content from USAGE_GUIDE.md -->
 
-- **Configuration Guide**: [QUICKSTART_REFACTORING.md](../QUICKSTART_REFACTORING.md)
-- **Refactoring Details**: [REFACTORING.md](../REFACTORING.md)
-- **Status Codes**: [STATUS_CODES.md](../STATUS_CODES.md)
-- **General Usage**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
+# Usage Guide - Lidarr Music Importer
 
-## 🆕 What's New in v2.0?
+**Version 2.0** - Updated for new modular architecture
 
-- ✅ **Configuration Management**: Use `config.py` or environment variables
-- ✅ **Modular Architecture**: Core functionality in reusable `lib/` modules  
-- ✅ **Better Security**: API keys no longer in source code
-- ✅ **Same CLI**: All existing commands work as before
+This guide covers common usage scenarios for the Lidarr Music Importer toolkit.
 
-**Migrating from v1.x?** See [QUICKSTART_REFACTORING.md](../QUICKSTART_REFACTORING.md)
+## 🚀 Getting Started
+
+### 1. First-Time Setup (Updated for v2.0!)
+
+```bash
+# Navigate to the project directory
+cd lidarr-music-importer
+
+# Copy configuration template
+cp config.template.py config.py
+
+# Edit configuration with your settings
+# Windows: notepad config.py
+# Unix: nano config.py
+```
+
+**Required Configuration (in config.py):**
+```python
+LIDARR_BASE_URL = "http://192.168.1.225:8686"  # Your Lidarr instance
+LIDARR_API_KEY = "your-api-key-here"           # From Lidarr settings
+ROOT_FOLDER_PATH = "/media/Music"              # Your music folder
+```
+
+**Alternative: Use Environment Variables**
+```bash
+export LIDARR_BASE_URL="http://192.168.1.225:8686"
+export LIDARR_API_KEY="your-api-key"
+export ROOT_FOLDER_PATH="/media/Music"
+```
+
+### 2. Verify Configuration
+
+```bash
+# Test configuration loads correctly
+py -3 -c "from lib.config import Config; c = Config(); print(c)"
+```
+
+### 3. Run Your First Import
+```bash
+# Test with example data (dry run)
+py -3 add_albums_to_lidarr.py ../examples/example_albums.csv --dry-run
+
+# If test looks good, run for real
+py -3 add_albums_to_lidarr.py ../examples/example_albums.csv
+```
+
+## 📊 Working with Spotify Data
+### Processing Spotify Export
+
+If you have Spotify data, use the parsing script first:
+
+```bash
+# Process Spotify liked songs export
+py -3 parse_spotify_for_lidarr.py /path/to/liked.csv
+
+# This creates: filtered_artist_album_pairs.csv
+
+# Import the processed data
+py -3 add_albums_to_lidarr.py filtered_artist_album_pairs.csv
+```
+
+## 🔄 Managing Large Imports
+
+### Batch Processing Strategy
+For large datasets (500+ albums):
+
+```bash
+# Start with a small test
+py -3 add_albums_to_lidarr.py large_dataset.csv --dry-run --max-items 10
+
+# Process in smaller batches
+py -3 add_albums_to_lidarr.py large_dataset.csv --batch-size 20
+
+# Skip pauses for faster processing (use carefully)
+py -3 add_albums_to_lidarr.py large_dataset.csv --no-batch-pause --batch-size 50
+```
+
+### Handling Interruptions
+
+```bash
+# If import gets interrupted, resume from where you left off (default behavior)
+py -3 add_albums_to_lidarr.py your_data.csv
+
+# Check progress by looking at status column in CSV
+```
+
+### Monitoring Progress
+
+```bash
+# Check how many items have each status
+grep -c "completed" your_data.csv
+grep -c "failed" your_data.csv
+grep -c "refresh_triggered" your_data.csv
+```
+
+## 🛠️ Troubleshooting Workflows
+
+### When Albums Don't Appear
+
+Many albums need metadata refresh after adding the artist:
+
+```bash
+# Run import normally
+py -3 add_albums_to_lidarr.py your_data.csv
+
+# Wait 10-15 minutes for Lidarr to refresh metadata
+# Then run again to catch albums that are now available
+py -3 add_albums_to_lidarr.py your_data.csv --skip-completed
+```
+
+### Debugging API Issues
+
+```bash
+# Test Lidarr connection
+py -3 test_lidarr_connection.py
+
+# Run with debug logging (edit script to set DEBUG level)
+py -3 add_albums_to_lidarr.py problem_albums.csv --max-items 5
+
+# Check Lidarr logs for API errors
+# Settings -> General -> Log Files
+```
+
+## 📁 Data Management
+
+### CSV File Organization
+
+Keep your data organized:
+
+```
+data/
+├── raw_exports/
+│   ├── spotify_liked_2024.csv
+│   └── spotify_liked_2023.csv
+├── processed/
+│   ├── filtered_albums_2024.csv
+│   └── high_priority_albums.csv
+└── completed/
+    └── imported_albums_2024.csv
+```
+
+---
+
+<!-- End: content from USAGE_GUIDE.md -->

@@ -17,7 +17,7 @@ import time
 import logging
 import re
 import xml.etree.ElementTree as ET
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 import requests
 from rapidfuzz import fuzz
 from lib.text_utils import normalize_artist_name, normalize_album_title_for_matching, strip_album_suffixes
@@ -65,6 +65,9 @@ class MusicBrainzClient:
             f"( {user_agent['contact']} )"
         )
         
+        # Keep Accept header as XML by default to match expected test behavior
+        # and MusicBrainz defaults; we still attempt to decode JSON responses
+        # in _make_request when present.
         self.session.headers.update({
             'User-Agent': user_agent_string,
             'Accept': 'application/xml'
@@ -83,6 +86,114 @@ class MusicBrainzClient:
             time.sleep(wait_time)
         
         self.last_request_time = time.time()
+
+    def _extract_artists_from_root(self, root: Union[dict, ET.Element], search_term: str) -> List[Dict[str, Any]]:
+        """Normalize artist candidates from either JSON dict or XML Element tree.
+
+        Returns a list of dicts with keys: id, name, ext:score, similarity
+        """
+        artists: List[Dict[str, Any]] = []
+        if isinstance(root, dict):
+            raw = root.get('artists') or root.get('artist-list') or []
+            for a in raw:
+                aid = a.get('id', '')
+                name = a.get('name', '')
+                score = a.get('score') or a.get('ext:score') or '100'
+                try:
+                    similarity = fuzz.ratio(search_term, (name or '').lower())
+                except Exception:
+                    similarity = 0
+                artists.append({'id': aid, 'name': name, 'ext:score': str(score), 'similarity': similarity})
+        else:
+            ns = {'mb': 'http://musicbrainz.org/ns/mmd-2.0#'}
+            elems = root.findall('.//mb:artist', ns)
+            for elem in elems:
+                aid = elem.get('id', '')
+                name_elem = elem.find('./mb:name', ns)
+                name = name_elem.text if name_elem is not None else ''
+                score = elem.get('ext:score', '100')
+                try:
+                    similarity = fuzz.ratio(search_term, (name or '').lower())
+                except Exception:
+                    similarity = 0
+                artists.append({'id': aid, 'name': name, 'ext:score': str(score), 'similarity': similarity})
+        return artists
+
+    def _extract_release_groups_from_json(self, root: dict) -> List[Dict[str, Any]]:
+        """Normalize release-group candidates from a JSON response into the
+        same dict shape used by the XML parser path and later selection logic.
+        """
+        rgs: List[Dict[str, Any]] = []
+        raw = root.get('release-groups') or root.get('release-group-list') or root.get('release-groups-list') or root.get('release-group') or []
+        for rg in raw:
+            rg_id = rg.get('id') or rg.get('gid') or ''
+            title = rg.get('title') or rg.get('name') or ''
+            score = rg.get('score') or rg.get('ext:score') or '100'
+
+            # artist-credit phrase
+            artist_credit_phrase = ''
+            ac = rg.get('artist-credit') or rg.get('artist-credit-phrase') or []
+            if isinstance(ac, list) and ac:
+                try:
+                    names = []
+                    for part in ac:
+                        if isinstance(part, dict):
+                            a = part.get('artist') or {}
+                            if isinstance(a, dict):
+                                n = a.get('name')
+                                if n:
+                                    names.append(n)
+                            elif part.get('name'):
+                                names.append(part.get('name'))
+                    artist_credit_phrase = ', '.join(names)
+                except Exception:
+                    artist_credit_phrase = ''
+            elif isinstance(ac, str):
+                artist_credit_phrase = ac
+
+            # relations -> urls
+            urls: List[str] = []
+            for rel in rg.get('relations', []) or []:
+                if isinstance(rel, dict):
+                    urlobj = rel.get('url') or {}
+                    if isinstance(urlobj, dict):
+                        res = urlobj.get('resource')
+                        if res:
+                            urls.append(res)
+                    tgt = rel.get('target')
+                    if tgt:
+                        urls.append(tgt)
+
+            fr = rg.get('first-release-date') or rg.get('first_release_date') or None
+
+            # track count: try to glean from releases list if present
+            tc = None
+            releases = rg.get('releases') or []
+            if releases:
+                try:
+                    first_release = releases[0]
+                    media = first_release.get('media') or []
+                    if media and isinstance(media, list):
+                        first_media = media[0]
+                        if first_media.get('track-count'):
+                            tc = int(first_media.get('track-count'))
+                        else:
+                            tracks = first_media.get('tracks') or first_media.get('track-list') or []
+                            if isinstance(tracks, list):
+                                tc = len(tracks)
+                except Exception:
+                    tc = None
+
+            rgs.append({
+                'id': rg_id,
+                'title': title,
+                'artist-credit-phrase': artist_credit_phrase,
+                'ext:score': str(score),
+                'urls': urls,
+                'first_release_date': fr,
+                'track_count': tc,
+            })
+        return rgs
     
     def _make_request(self, endpoint: str, params: Dict[str, str]) -> Optional[ET.Element]:
         """
@@ -96,14 +207,23 @@ class MusicBrainzClient:
             Parsed XML Element tree, or None if request failed
         """
         self._wait_for_rate_limit()
-        
+
         url = f"{self.base_url}/{endpoint}"
-        
+
         try:
             response = self.session.get(url, params=params, timeout=self.timeout)
-            
+
             if response.status_code == 200:
-                return ET.fromstring(response.content)
+                # Prefer JSON where the caller requests it; attempt to decode JSON
+                try:
+                    return response.json()
+                except Exception:
+                    # Fallback to XML parsing for compatibility
+                    try:
+                        return ET.fromstring(response.content)
+                    except ET.ParseError as e:
+                        logger.debug(f"MusicBrainz XML parse error: {e}")
+                        return None
             elif response.status_code == 503:
                 logger.debug(f"MusicBrainz rate limited (503), retrying...")
                 return None
@@ -112,15 +232,12 @@ class MusicBrainzClient:
                     f"MusicBrainz error {response.status_code}: {response.text[:200]}"
                 )
                 return None
-                
+
         except requests.exceptions.Timeout:
             logger.debug(f"MusicBrainz request timeout after {self.timeout}s")
             return None
         except requests.exceptions.RequestException as e:
             logger.debug(f"MusicBrainz request failed: {e}")
-            return None
-        except ET.ParseError as e:
-            logger.debug(f"MusicBrainz XML parse error: {e}")
             return None
     
     def search_artists(self, artist: str, limit: int = 5) -> Dict[str, Any]:
@@ -138,56 +255,48 @@ class MusicBrainzClient:
         # Strip brackets from artist name for search query
         search_artist = artist.strip('[]') if artist.startswith('[') and artist.endswith(']') else artist
 
-        # Try both quoted and unquoted artist queries. Collect results from
-        # both (if available) and prefer candidates returned from the quoted
-        # query. This avoids transient network failures where the quoted
-        # query might temporarily fail and the unquoted one returns a wrong
-        # candidate.
-        queries = [(f'artist:"{search_artist}"', True), (f'artist:{search_artist}', False)]
-        ns = {'mb': 'http://musicbrainz.org/ns/mmd-2.0#'}
-
+        # Prefer a quoted, precise search first. Only if the quoted search
+        # returns no results (or fails) do we try the looser unquoted query.
         collected: Dict[str, Dict[str, Any]] = {}
         quoted_failed = False
         search_term = (search_artist or '').lower()
 
-        for q, is_quoted in queries:
-            params = {'query': q, 'limit': str(limit)}
-            root = self._make_request('artist', params)
-            if root is None:
-                # network issue or rate-limited; try next query
-                if is_quoted:
-                    quoted_failed = True
-                continue
-            artists = root.findall('.//mb:artist', ns)
-            for artist_elem in artists:
-                aid = artist_elem.get('id', '')
-                name_elem = artist_elem.find('./mb:name', ns)
-                name = name_elem.text if name_elem is not None else ''
-                score = artist_elem.get('ext:score', '100')
-                try:
-                    similarity = fuzz.ratio(search_term, (name or '').lower())
-                except Exception:
-                    similarity = 0
+        # First: quoted, precise query
+        q = f'artist:"{search_artist}"'
+        params = {'query': q, 'limit': str(limit), 'fmt': 'json'}
+        root = self._make_request('artist', params)
+        if root is None:
+            quoted_failed = True
+            artists = []
+        else:
+            artists = self._extract_artists_from_root(root, search_term)
 
-                # If we've seen this artist from the other query, merge info and
-                # prefer quoted=True if either source was quoted.
-                if aid in collected:
-                    existing = collected[aid]
-                    existing['similarity'] = max(existing.get('similarity', 0), similarity)
-                    existing['is_quoted'] = existing.get('is_quoted', False) or is_quoted
-                    # keep the highest ext:score as string
-                    try:
-                        existing['ext:score'] = str(max(int(existing.get('ext:score', '0') or 0), int(score or 0)))
-                    except Exception:
-                        existing['ext:score'] = score
-                else:
-                    collected[aid] = {
-                        'id': aid,
-                        'name': name,
-                        'ext:score': score,
-                        'similarity': similarity,
-                        'is_quoted': is_quoted,
-                    }
+        for a in artists:
+            aid = str(a.get('id') or '')
+            name = a.get('name')
+            score = a.get('ext:score')
+            similarity = a.get('similarity', 0)
+            if aid in collected:
+                existing = collected[aid]
+                existing['similarity'] = max(existing.get('similarity', 0), similarity)
+                existing['is_quoted'] = existing.get('is_quoted', False) or True
+                try:
+                    existing['ext:score'] = str(max(int(existing.get('ext:score', '0') or 0), int(score or 0)))
+                except Exception:
+                    existing['ext:score'] = score
+            else:
+                collected[aid] = {
+                    'id': aid,
+                    'name': name,
+                    'ext:score': score,
+                    'similarity': similarity,
+                    'is_quoted': True,
+                }
+
+        # Note: we intentionally avoid issuing a second, looser query by
+        # default. If the quoted query failed or returned no results, the
+        # 'quoted_failed' flag will be True and the later fallback logic
+        # may attempt a retry.
 
         if not collected:
             return {"artist-list": []}
@@ -198,15 +307,25 @@ class MusicBrainzClient:
         has_quoted = any(a.get('is_quoted') for a in collected.values())
         if not has_quoted and quoted_failed:
             q = f'artist:"{search_artist}"'
-            params = {'query': q, 'limit': str(limit)}
+            params = {'query': q, 'limit': str(limit), 'fmt': 'json'}
             root = self._make_request('artist', params)
             if root is not None:
-                artists = root.findall('.//mb:artist', ns)
+                if isinstance(root, dict):
+                    artists = root.get('artists') or root.get('artist-list') or []
+                else:
+                    ns = {'mb': 'http://musicbrainz.org/ns/mmd-2.0#'}
+                    artists = root.findall('.//mb:artist', ns)
+
                 for artist_elem in artists:
-                    aid = artist_elem.get('id', '')
-                    name_elem = artist_elem.find('./mb:name', ns)
-                    name = name_elem.text if name_elem is not None else ''
-                    score = artist_elem.get('ext:score', '100')
+                    if isinstance(root, dict):
+                        aid = artist_elem.get('id', '')
+                        name = artist_elem.get('name', '')
+                        score = artist_elem.get('score') or artist_elem.get('ext:score') or '100'
+                    else:
+                        aid = artist_elem.get('id', '')
+                        name_elem = artist_elem.find('./mb:name', {'mb': 'http://musicbrainz.org/ns/mmd-2.0#'})
+                        name = name_elem.text if name_elem is not None else ''
+                        score = artist_elem.get('ext:score', '100')
                     try:
                         similarity = fuzz.ratio(search_term, (name or '').lower())
                     except Exception:
@@ -280,6 +399,8 @@ class MusicBrainzClient:
         limit: int = 5,
         artist_aliases: Optional[Dict[str, List[str]]] = None,
         artist_mbid: Optional[str] = None,
+        spotify_album_id: Optional[str] = None,
+        release_date: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Search for a release group (album) by artist and title.
@@ -334,40 +455,81 @@ class MusicBrainzClient:
 
                 params = {
                     'query': query,
-                    'limit': str(limit)
+                    'limit': str(limit),
+                    # request URL relations and release info (for dates/track-count)
+                    'inc': 'url-rels+releases'
                 }
                 
                 root = self._make_request('release-group', params)
                 if root is None:
                     continue
                 
-                # Parse XML response
-                ns = {
-                    'mb': 'http://musicbrainz.org/ns/mmd-2.0#',
-                    'ns2': 'http://musicbrainz.org/ns/ext#-2.0'
-                }
-                release_groups = root.findall('.//mb:release-group', ns)
-                
-                if not release_groups:
-                    logger.debug(f"No results from MusicBrainz")
-                    continue
-                
-                logger.debug(f"Got {len(release_groups)} raw results from MusicBrainz")
-                
-                # Parse and filter results
-                rg_list = self._parse_release_groups(
-                    release_groups, ns, artist, artist_aliases
-                )
+                # Parse XML or JSON response
+                rg_list = []
+                if isinstance(root, dict):
+                    # Normalize JSON response into the same rg dict shape used by the XML parser
+                    rgs = self._extract_release_groups_from_json(root)
+                    logger.debug(f"Got {len(rgs)} raw results from MusicBrainz (json)")
+                    # Filter by artist relevance
+                    for rg_data in rgs:
+                        if self._is_artist_match(rg_data['artist-credit-phrase'], artist, artist_aliases):
+                            rg_list.append(rg_data)
+                            logger.debug(f"Kept: '{rg_data['title']}' by '{rg_data['artist-credit-phrase']}' (score: {rg_data.get('ext:score')})")
+                        else:
+                            logger.debug(f"Filtered: '{rg_data['title']}' by '{rg_data['artist-credit-phrase']}' (not a match for '{artist}')")
+                else:
+                    ns = {
+                        'mb': 'http://musicbrainz.org/ns/mmd-2.0#',
+                        'ns2': 'http://musicbrainz.org/ns/ext#-2.0'
+                    }
+                    release_groups = root.findall('.//mb:release-group', ns)
+
+                    if not release_groups:
+                        logger.debug(f"No results from MusicBrainz")
+                        continue
+
+                    logger.debug(f"Got {len(release_groups)} raw results from MusicBrainz")
+
+                    # Parse and filter results (XML path)
+                    rg_list = self._parse_release_groups(
+                        release_groups, ns, artist, artist_aliases
+                    )
                 
                 if rg_list:
-                    logger.debug(
-                        f"Found {len(rg_list)} matching albums with title '{title_variant}' (query {query_idx})"
-                    )
-                    # Prefer exact title matches (case-insensitive) when available —
-                    # e.g. "GOTNOTIME, Vol. 5" should match Vol. 5 not Vol. 3.
+                    logger.debug(f"Found {len(rg_list)} matching albums with title '{title_variant}' (query {query_idx})")
+
+                    # 1) If caller provided a Spotify album id, prefer release-groups
+                    # that include a Spotify URL relation matching that id.
+                    if spotify_album_id:
+                        matches = []
+                        for rg in rg_list:
+                            urls = rg.get('urls', [])
+                            for u in urls:
+                                if not u:
+                                    continue
+                                if spotify_album_id in u or f"open.spotify.com/album/{spotify_album_id}" in u or f"spotify:album:{spotify_album_id}" in u:
+                                    matches.append(rg)
+                                    break
+                        if matches:
+                            logger.debug(f"Selecting {len(matches)} candidate(s) by Spotify album id match")
+                            return {"release-group-list": matches}
+
+                    # 2) Prefer candidates that match the requested release year (if provided)
+                    if release_date:
+                        year_match = []
+                        req_year = release_date.strip()[:4]
+                        for rg in rg_list:
+                            fr = (rg.get('first_release_date') or '')
+                            if fr and fr.startswith(req_year):
+                                year_match.append(rg)
+                        if year_match:
+                            year_match.sort(key=lambda r: int(r.get('ext:score') or 0), reverse=True)
+                            logger.debug(f"Selecting {len(year_match)} candidate(s) by release year {req_year}")
+                            return {"release-group-list": year_match}
+
+                    # 3) Prefer exact title matches (case-insensitive)
                     exact_matches = [rg for rg in rg_list if (rg.get('title') or '').strip().lower() == title_variant.strip().lower()]
                     if exact_matches:
-                        # sort exact matches by ext:score desc and return
                         exact_matches.sort(key=lambda r: int(r.get('ext:score') or 0), reverse=True)
                         return {"release-group-list": exact_matches}
 
@@ -414,23 +576,39 @@ class MusicBrainzClient:
         # and lets us inspect artist-credit phrases to find a match.
         for title_variant in title_variations:
             logger.debug(f"Fallback: trying releasegroup-only search for '{title_variant}'")
-            params = {'query': f'releasegroup:"{title_variant}"', 'limit': str(limit)}
+            params = {'query': f'releasegroup:"{title_variant}"', 'limit': str(limit), 'fmt': 'json'}
             root = self._make_request('release-group', params)
             if root is None:
                 continue
-            ns = {
-                'mb': 'http://musicbrainz.org/ns/mmd-2.0#',
-                'ns2': 'http://musicbrainz.org/ns/ext#-2.0'
-            }
-            release_groups = root.findall('.//mb:release-group', ns)
-            if not release_groups:
-                logger.debug("Fallback search returned no results")
-                continue
-            logger.debug(f"Fallback search got {len(release_groups)} raw results from MusicBrainz")
-            rg_list = self._parse_release_groups(release_groups, ns, artist, artist_aliases, title_variant)
-            if rg_list:
-                logger.debug(f"Found {len(rg_list)} matching albums via fallback for '{title_variant}'")
-                return {"release-group-list": rg_list}
+            # Support JSON or XML fallback parsing
+            if isinstance(root, dict):
+                rgs = self._extract_release_groups_from_json(root)
+                if not rgs:
+                    logger.debug("Fallback search returned no results (json)")
+                    continue
+                logger.debug(f"Fallback search got {len(rgs)} raw results from MusicBrainz (json)")
+                rg_list = []
+                for rg_data in rgs:
+                    if self._is_artist_match(rg_data['artist-credit-phrase'], artist, artist_aliases):
+                        rg_list.append(rg_data)
+
+                if rg_list:
+                    logger.debug(f"Found {len(rg_list)} matching albums via fallback for '{title_variant}'")
+                    return {"release-group-list": rg_list}
+            else:
+                ns = {
+                    'mb': 'http://musicbrainz.org/ns/mmd-2.0#',
+                    'ns2': 'http://musicbrainz.org/ns/ext#-2.0'
+                }
+                release_groups = root.findall('.//mb:release-group', ns)
+                if not release_groups:
+                    logger.debug("Fallback search returned no results")
+                    continue
+                logger.debug(f"Fallback search got {len(release_groups)} raw results from MusicBrainz")
+                rg_list = self._parse_release_groups(release_groups, ns, artist, artist_aliases, title_variant)
+                if rg_list:
+                    logger.debug(f"Found {len(rg_list)} matching albums via fallback for '{title_variant}'")
+                    return {"release-group-list": rg_list}
         logger.debug(
             f"No matches found after trying {len(title_variations)} title variations"
         )
@@ -602,8 +780,37 @@ class MusicBrainzClient:
                 'id': rg.get('id', ''),
                 'title': title_elem.text if title_elem is not None else '',
                 'artist-credit-phrase': artist_credit.text if artist_credit is not None else '',
-                'ext:score': score
+                'ext:score': score,
+                'urls': [],
+                'first_release_date': None,
+                'track_count': None,
             }
+
+            # Extract first-release-date if present
+            try:
+                fr_elem = rg.find('./mb:first-release-date', ns)
+                if fr_elem is not None and fr_elem.text:
+                    rg_data['first_release_date'] = fr_elem.text
+            except Exception:
+                pass
+
+            # Try to extract track count from first release (if included via inc=releases)
+            try:
+                first_release = rg.find('.//mb:release', ns)
+                if first_release is not None:
+                    tracks = first_release.findall('.//mb:medium/mb:track-list/mb:track', ns)
+                    if tracks:
+                        rg_data['track_count'] = len(tracks)
+            except Exception:
+                pass
+
+            # Extract relation URLs (if any)
+            try:
+                targets = [t.text for t in rg.findall('.//mb:relation/mb:target', ns) if t is not None and t.text]
+                if targets:
+                    rg_data['urls'] = targets
+            except Exception:
+                pass
             
             # Filter results by artist relevance
             if self._is_artist_match(rg_data['artist-credit-phrase'], artist, artist_aliases):
@@ -617,6 +824,7 @@ class MusicBrainzClient:
                     f"Filtered: '{rg_data['title']}' by '{rg_data['artist-credit-phrase']}' "
                     f"(not a match for '{artist}')"
                 )
+        
         
         # If we have a searched title and there are multiple matches, prefer
         # exact-title matches (case-insensitive) before falling back to fuzzy

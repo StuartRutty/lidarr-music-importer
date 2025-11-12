@@ -23,7 +23,12 @@ Paste this into your profile (replace `C:\path\to\scripts` with your actual path
 
 ```powershell
 # Lidarr Album Import Shortcuts
-$lidarrScriptPath = "C:\Users\rutty\SyncToMini\Compose\lidarr-music-importer\scripts"
+# Edit this to point to your local project path, or set it dynamically.
+# Example (placeholder):
+$lidarrScriptPath = "C:\\path\\to\\lidarr-music-importer\\scripts"  # <-- set this to your path
+
+# Example dynamic: derive path from this profile location if you keep scripts next to profile
+# $lidarrScriptPath = Join-Path (Split-Path -Parent $PROFILE) "..\lidarr-music-importer\scripts"
 
 function lidarr-import {
     <#

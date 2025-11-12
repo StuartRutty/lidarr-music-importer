@@ -345,3 +345,31 @@ To add a new format:
 ## License
 
 Part of the lidarr-music-importer project.
+
+---
+
+## Enhanced MusicBrainz Search (migrated)
+
+The parser includes an enhanced MusicBrainz album search that automatically tries multiple title variations when the exact title doesn't match. This improves match rates for albums with prefixes like "ep", "single", "the", etc. The following summarizes the behavior and implementation notes.
+
+### Title Variation Generation
+
+The parser generates and tries multiple title variations:
+
+- Prefix removal: e.g. "ep seeds" → tries ["ep seeds", "seeds", "Ep Seeds"]
+- Case variations: if the title is lowercased, it may try Title Case; short titles may be tried as UPPERCASE for acronyms.
+
+The implementation lives in the MusicBrainz client and the `_generate_title_variations()` helper. Exact matches are always attempted first; variations are used as intelligent fallbacks.
+
+### Logging
+
+Detailed step-by-step logging is available when verbose or INFO log levels are enabled. The parser emits clear messages about which variations were tried and which result was selected. Emoji-based indicators are used in CLI output for quick scanning (e.g., 🔍, 📝, ✅).
+
+### Integration with CSV Cleaning
+
+Title variation logic works in concert with CSV cleaning (removal of suffixes like "(Deluxe)", trimming, unicode normalization). Cleaned titles are fed into variation generation to increase the chance of exact or near-exact matches.
+
+### Tests
+
+Unit tests cover common prefixes and edge cases. See `tests/test_mb_search_enhanced.py` for example fixtures and expected selection behavior.
+

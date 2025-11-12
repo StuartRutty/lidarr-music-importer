@@ -17,6 +17,7 @@ import argparse
 import csv
 import logging
 import sys
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -62,27 +63,11 @@ from lib.text_utils import (
 )
 
 from lib.csv_handler import ItemStatus
+from lib.parser_utils import normalize_spotify_id, aggregate_spotify_rows, read_csv_to_rows
+from lib.models import AlbumEntry
 
 
-@dataclass
-class AlbumEntry:
-    artist: str
-    album: str
-    album_search: str = ""
-    track_count: int = 1
-    source_format: str = ""
-    matching_risk: bool = False
-    risk_reason: str = ""
-    mb_artist_id: str = ""
-    mb_release_id: str = ""
-
-    def __hash__(self):
-        return hash((self.artist.lower(), self.album.lower()))
-
-    def __eq__(self, other):
-        if not isinstance(other, AlbumEntry):
-            return NotImplemented
-        return (self.artist.lower(), self.album.lower()) == (other.artist.lower(), other.album.lower())
+# AlbumEntry dataclass moved to lib.models for reuse across scripts/tests
 
 
 class UniversalParser:
@@ -130,81 +115,86 @@ class UniversalParser:
         album_filter: Optional[str] = None,
         max_items: Optional[int] = None,
     ) -> None:
-        # Read CSV and aggregate by artist+album counting tracks
-        artist_album_counts: Dict[Tuple[str, str], int] = {}
+        # Read CSV rows using shared helper and aggregate Spotify metadata
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                # helper: prefer exact 'name' headers, fallback to generic
-                def find_key_for(row, primary_terms, secondary_terms):
-                    for k in row.keys():
-                        lk = k.lower()
-                        for p in primary_terms:
-                            if p in lk:
-                                return k
-                    for k in row.keys():
-                        lk = k.lower()
-                        for s in secondary_terms:
-                            if s in lk:
-                                return k
-                    return None
-
-                for row in reader:
-                    self.stats['raw_entries'] += 1
-                    artist_key = find_key_for(row, ['artist name'], ['artist'])
-                    album_key = find_key_for(row, ['album name'], ['album'])
-                    if not artist_key or not album_key:
-                        continue
-
-                    artist_raw = row.get(artist_key, '')
-                    album_raw = row.get(album_key, '')
-                    if not artist_raw or not album_raw:
-                        continue
-
-                    # For cases where multiple artists are present, take the first listed
-                    if ',' in artist_raw:
-                        artist_raw = artist_raw.split(',')[0]
-
-                    # Preserve the original album title (don't strip suffixes yet)
-                    artist = clean_csv_input(artist_raw, is_artist=True)
-                    album = clean_csv_input(album_raw, is_artist=False, strip_suffixes=False)
-                    # Apply simple artist/album filters early (case-insensitive substring)
-                    if artist_filter and artist_filter.lower() not in artist.lower():
-                        continue
-                    if album_filter and album_filter.lower() not in album.lower():
-                        continue
-
-                    # If max_items is set, stop collecting new unique pairs once reached
-                    if max_items and len(artist_album_counts) >= int(max_items):
-                        # we still increment raw_entries but avoid adding new keys
-                        continue
-                    # normalized form used for searches (strip edition suffixes for better MB matches)
-                    album_search = strip_album_suffixes(album)
-                    key = (artist, album)
-                    artist_album_counts[key] = artist_album_counts.get(key, 0) + 1
-
+            rows, fieldnames = read_csv_to_rows(file_path)
         except FileNotFoundError:
             raise
 
-    # Apply filters based on counts
-        # Compute artist-level counts for min_artist_songs filtering
-        artist_totals: Dict[str, int] = {}
-        for (a, _), c in artist_album_counts.items():
-            artist_totals[a] = artist_totals.get(a, 0) + c
+        # Best-effort: reuse the library's aggregator for Spotify-specific metadata
+        spotify_meta = aggregate_spotify_rows(rows)
 
+        # Compute artist/album counts while preserving the script's cleaning behavior
+        artist_album_counts: Dict[Tuple[str, str], int] = {}
+        artist_totals: Dict[str, int] = {}
+
+        # Helper to find the best key for a logical column name
+        def find_key_for(row: Dict[str, str], primary_terms, secondary_terms):
+            for k in row.keys():
+                lk = k.lower()
+                for p in primary_terms:
+                    if p in lk:
+                        return k
+            for k in row.keys():
+                lk = k.lower()
+                for s in secondary_terms:
+                    if s in lk:
+                        return k
+            return None
+
+        for row in rows:
+            # Count raw rows for statistics (matches previous behavior)
+            self.stats['raw_entries'] += 1
+            # use header detection to find artist/album columns
+            artist_key = find_key_for(row, ['artist name'], ['artist'])
+            album_key = find_key_for(row, ['album name'], ['album'])
+            artist_raw = row.get(artist_key, '') if artist_key else ''
+            album_raw = row.get(album_key, '') if album_key else ''
+            if not artist_raw or not album_raw:
+                continue
+            if ',' in artist_raw:
+                artist_raw = artist_raw.split(',')[0]
+            artist = clean_csv_input(artist_raw, is_artist=True)
+            album = clean_csv_input(album_raw, is_artist=False, strip_suffixes=False)
+
+            if artist_filter and artist_filter.lower() not in artist.lower():
+                continue
+            if album_filter and album_filter.lower() not in album.lower():
+                continue
+
+            key = (artist, album)
+            # If max_items is set and we've already collected that many unique pairs,
+            # continue but still count the raw row (preserve legacy behavior).
+            if max_items and key not in artist_album_counts and len(artist_album_counts) >= int(max_items):
+                continue
+
+            artist_album_counts[key] = artist_album_counts.get(key, 0) + 1
+            artist_totals[artist] = artist_totals.get(artist, 0) + 1
+
+        # Apply filters based on counts and produce AlbumEntry items
         for (artist, album), track_count in artist_album_counts.items():
-            # Filter by artist-level minimum songs
             if min_artist_songs and artist_totals.get(artist, 0) < int(min_artist_songs):
                 self.stats['spotify_filtered_artists'] += 1
                 continue
-            # Filter low-activity artists/albums
             if track_count < min_album_songs:
                 self.stats['spotify_filtered_albums'] += 1
                 continue
 
-            # Add entry
-            # compute album_search per-pair (don't rely on loop-local variable)
-            entry = AlbumEntry(artist=artist, album=album, album_search=strip_album_suffixes(album), track_count=track_count, source_format='spotify_csv')
+            meta = spotify_meta.get((artist, album), {})
+            entry = AlbumEntry(
+                artist=artist,
+                album=album,
+                album_search=strip_album_suffixes(album),
+                track_count=track_count,
+                source_format='spotify_csv',
+                spotify_album_id=meta.get('spotify_album_id', '') or '',
+                spotify_artist_id=meta.get('spotify_artist_id', '') or '',
+                spotify_album_url=meta.get('spotify_album_url', '') or '',
+                release_date=meta.get('release_date', '') or '',
+                total_tracks=track_count,
+                track_titles=';'.join(meta.get('track_titles', [])) if meta.get('track_titles') else '',
+                track_isrcs=';'.join(meta.get('track_isrcs', [])) if meta.get('track_isrcs') else '',
+            )
             self.entries.append(entry)
 
     def parse_simple_csv(self, file_path: str, artist_filter: Optional[str] = None, album_filter: Optional[str] = None, max_items: Optional[int] = None) -> None:
@@ -376,7 +366,28 @@ class UniversalParser:
                 # Use a normalized album_search title (stripped of edition suffixes) for more reliable matches
                 search_album = entry.album_search or entry.album
                 # When we have an MB artist id, pass it to release-group search to query by arid: which is more deterministic
-                mb_release = self.mb_client.search_release_groups(entry.artist, search_album, limit=5, artist_mbid=entry.mb_artist_id if entry.mb_artist_id else None)
+                # Call search_release_groups; be tolerant of older fake/legacy
+                # clients that don't accept newer keyword args (spotify_album_id,
+                # release_date). If a TypeError occurs, fall back to the older
+                # signature to maintain test compatibility.
+                try:
+                    mb_release = self.mb_client.search_release_groups(
+                        entry.artist,
+                        search_album,
+                        limit=5,
+                        artist_mbid=entry.mb_artist_id if entry.mb_artist_id else None,
+                        spotify_album_id=entry.spotify_album_id if entry.spotify_album_id else None,
+                        release_date=entry.release_date if entry.release_date else None,
+                    )
+                except TypeError:
+                    # Legacy fallback: some fake clients (tests) expect the
+                    # older signature without spotify_album_id/release_date.
+                    mb_release = self.mb_client.search_release_groups(
+                        entry.artist,
+                        search_album,
+                        limit=5,
+                        artist_mbid=entry.mb_artist_id if entry.mb_artist_id else None,
+                    )
                 release_list = mb_release.get('release-group-list', [])
                 if release_list:
                     best_release = release_list[0]
@@ -480,11 +491,14 @@ class UniversalParser:
 
         entries_to_write.sort(key=lambda e: (e.artist.lower(), e.album.lower()))
         has_mb_ids = any(e.mb_artist_id or e.mb_release_id for e in entries_to_write)
+        has_spotify = any(e.spotify_album_id or e.spotify_artist_id for e in entries_to_write)
 
         with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             # Include album_search column so downstream tools can use a normalized title for lookups
             header = ['artist', 'album', 'album_search']
+            if has_spotify:
+                header.extend(['spotify_album_id', 'spotify_artist_id', 'spotify_album_url', 'release_date', 'total_tracks', 'track_titles', 'track_isrcs'])
             if has_mb_ids:
                 header.extend(['mb_artist_id', 'mb_release_id'])
             if include_risk_column:
@@ -495,6 +509,16 @@ class UniversalParser:
                 # Only write album_search if it differs from the original album
                 album_search_value = entry.album_search if entry.album_search and entry.album_search != entry.album else ''
                 row = [entry.artist, entry.album, album_search_value]
+                if has_spotify:
+                    row.extend([
+                        entry.spotify_album_id,
+                        entry.spotify_artist_id,
+                        entry.spotify_album_url,
+                        entry.release_date,
+                        str(entry.total_tracks) if entry.total_tracks is not None else '',
+                        entry.track_titles,
+                        entry.track_isrcs,
+                    ])
                 if has_mb_ids:
                     row.extend([entry.mb_artist_id, entry.mb_release_id])
                 if include_risk_column:
@@ -569,7 +593,10 @@ QUICK ALIAS (optional):
     )
 
     parser.add_argument('input', help='Input file (CSV, TSV, or text)')
-    parser.add_argument('-o', '--output', default='albums.csv', help='Output CSV file (default: albums.csv)')
+    # Default output is derived from the input filename: '<base>_parsed.csv' or
+    # '<base>_parsed_enriched.csv' when enrichment is performed. Users can still
+    # override with -o/--output.
+    parser.add_argument('-o', '--output', default=None, help='Output CSV file (default: <input>_parsed.csv or <input>_parsed_enriched.csv when enriched)')
     parser.add_argument('--dry-run', action='store_true', help='Parse and show stats without writing output')
     parser.add_argument('--fuzzy-threshold', type=int, default=85, help='Fuzzy matching threshold 0-100 (default: 85)')
     parser.add_argument('--no-normalize', action='store_true', help='Skip normalization (keep original formatting)')
@@ -615,10 +642,22 @@ def main() -> None:
     # Note: artist/album/max-items filters are applied during parsing to avoid
     # unnecessary MusicBrainz lookups. They are passed into parse_file above.
 
-    if not args.no_enrich_musicbrainz:
+    # Compute default output filenames when user didn't provide -o/--output
+    import os
+    input_base, input_ext = os.path.splitext(args.input)
+    parsed_default = f"{input_base}_parsed.csv"
+    enriched_default = f"{input_base}_parsed_enriched.csv"
+
+    # Decide which output to use: user-specified wins; otherwise prefer the
+    # enriched filename if enrichment will be performed, otherwise the parsed one.
+    user_output = args.output
+    will_enrich = not args.no_enrich_musicbrainz
+    computed_output = user_output if user_output else (enriched_default if will_enrich and not args.dry_run else parsed_default)
+
+    if will_enrich:
         try:
-            output_path = args.output if not args.dry_run else None
-            up.enrich_with_musicbrainz(mb_delay=args.mb_delay, output_path=output_path)
+            output_path_for_enrichment = None if args.dry_run else computed_output
+            up.enrich_with_musicbrainz(mb_delay=args.mb_delay, output_path=output_path_for_enrichment)
         except Exception as e:
             logging.error(f"❌ Error during MusicBrainz enrichment: {e}")
             logging.warning("⚠️  Continuing without enrichment...")
@@ -626,8 +665,8 @@ def main() -> None:
     up.print_statistics()
 
     if not args.dry_run:
-        up.write_output(args.output, include_risk_column=args.include_risk_info, skip_risky=args.skip_risky)
-        logging.info(f"✅ Done! Output ready for: py -3 add_albums_to_lidarr.py {args.output}")
+        up.write_output(computed_output, include_risk_column=args.include_risk_info, skip_risky=args.skip_risky)
+        logging.info(f"✅ Done! Output ready for: py -3 add_albums_to_lidarr.py {computed_output}")
     else:
         logging.info("🔍 Dry run complete - no output file written")
 
