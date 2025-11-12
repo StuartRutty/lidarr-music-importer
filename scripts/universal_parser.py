@@ -90,7 +90,7 @@ lib_path = Path(__file__).parent.parent / 'lib'
 if str(lib_path) not in sys.path:
     sys.path.insert(0, str(lib_path))
 
-from text_utils import (
+from lib.text_utils import (
     normalize_artist_name,
     normalize_album_title_for_matching,
     clean_csv_input,

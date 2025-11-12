@@ -13,7 +13,7 @@ from pathlib import Path
 lib_path = Path(__file__).parent.parent / 'lib'
 sys.path.insert(0, str(lib_path))
 
-from text_utils import clean_csv_input
+from lib.text_utils import clean_csv_input
 
 
 def test_artist_cleaning():

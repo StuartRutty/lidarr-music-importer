@@ -54,7 +54,7 @@ if str(lib_path) not in sys.path:
 from config_manager import Config
 from lidarr_client import LidarrClient
 from csv_handler import CSVHandler, ItemStatus
-from text_utils import (
+from lib.text_utils import (
     normalize_artist_name,
     normalize_profanity,
     strip_album_suffixes,
