@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     strategy:
       matrix:
         python-version: ['3.10', '3.11']
@@ -31,6 +33,19 @@ jobs:
       - name: Debug Python path
         run: |
           python -c "import sys, json; print(json.dumps(sys.path, indent=2))"
+
+      - name: Try importing package `lib`
+        run: |
+          python - <<'PY'
+          import sys, traceback
+          try:
+              import lib
+              print('lib imported:', getattr(lib, '__file__', '<no __file__>'))
+          except Exception as e:
+              print('lib import failed:', e)
+              traceback.print_exc()
+          print('\nPYTHONPATH:', '\n'.join(sys.path))
+          PY
 
       - name: Run tests
         env:
