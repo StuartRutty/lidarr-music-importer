@@ -5,9 +5,14 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  schedule:
+    # run a full matrix weekly to catch dependency drift
+    - cron: '0 3 * * 1' # weekly on Monday at 03:00 UTC
 
 jobs:
-  test:
+  full_tests:
+    # Full install & test matrix for PRs and scheduled runs
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
@@ -23,16 +28,24 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Ensure pip installed
         run: |
-          # Make sure pip exists for this Python interpreter
+          # Ensure pip is available for this interpreter (works in most images)
           python -m ensurepip --upgrade || true
-
-          # If ensurepip didn't install pip, fallback to get-pip.py
           if ! python -m pip --version >/dev/null 2>&1; then
             curl -sS https://bootstrap.pypa.io/get-pip.py | python -
           fi
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+
+      - name: Install dependencies (full)
+        run: |
           # Upgrade packaging basics used during builds
           python -m pip install --upgrade pip setuptools wheel
 
@@ -58,7 +71,53 @@ jobs:
           PY
 
       - name: Run tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest -q
+
+  smoke_tests:
+    # Lightweight smoke checks for pushes to main/master to avoid blocking quick fixes
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Ensure pip installed
+        run: |
+          python -m ensurepip --upgrade || true
+          if ! python -m pip --version >/dev/null 2>&1; then
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python -
+          fi
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-3.11-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-3.11-
+
+      - name: Install minimal deps (smoke)
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Quick import check
+        run: |
+          python - <<'PY'
+          import lib
+          print('lib ok ->', getattr(lib, '__file__', '<no __file__>'))
+          PY
+
+      - name: Run small smoke test set
+        run: |
+          # Run a targeted subset of tests as a smoke check. Adjust substrings as needed.
+          pytest -q -k "text_utils or config_manager or csv_handler"
