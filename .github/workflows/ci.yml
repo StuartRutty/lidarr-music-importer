@@ -29,13 +29,27 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
-      - name: Ensure pip installed
+      - name: Ensure pip installed (non-Windows)
+        if: runner.os != 'Windows'
         run: |
           # Ensure pip is available for this interpreter (works in most images)
           python -m ensurepip --upgrade || true
           if ! python -m pip --version >/dev/null 2>&1; then
             curl -sS https://bootstrap.pypa.io/get-pip.py | python -
           fi
+
+      - name: Ensure pip installed (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Ensure pip is available on Windows (PowerShell compatible)
+          python -m ensurepip --upgrade
+          try {
+            python -m pip --version *> $null
+          } catch {
+            Invoke-RestMethod -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile 'get-pip.py'
+            python get-pip.py
+          }
 
       - name: Cache pip (explicit)
         uses: actions/cache@v4
@@ -90,12 +104,25 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Ensure pip installed
+      - name: Ensure pip installed (non-Windows)
+        if: runner.os != 'Windows'
         run: |
           python -m ensurepip --upgrade || true
           if ! python -m pip --version >/dev/null 2>&1; then
             curl -sS https://bootstrap.pypa.io/get-pip.py | python -
           fi
+
+      - name: Ensure pip installed (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m ensurepip --upgrade
+          try {
+            python -m pip --version *> $null
+          } catch {
+            Invoke-RestMethod -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile 'get-pip.py'
+            python get-pip.py
+          }
 
       - name: Cache pip
         uses: actions/cache@v4
