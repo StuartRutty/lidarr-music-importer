@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lidarr Importer — Web UI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Lidarr Importer — Web UI (Prototype)</h1>
+      <form method="post" action="/upload" enctype="multipart/form-data" id="upload-form">
+        <div class="form-row">
+          <label for="file-input">Upload CSV file</label>
+          <input id="file-input" type="file" name="file" accept=".csv" aria-describedby="upload-help" />
+          <div id="upload-help" class="small muted">CSV must include at least `artist,album` columns. Enriched CSVs may include `mb_artist_id` and `mb_release_id`.</div>
+
+          <!-- Staged file indicator (hidden until a file is chosen) -->
+          <div id="staged-file" class="staged hidden" role="region" aria-live="polite">
+            <span id="staged-name" class="staged-name"></span>
+            <button id="unstage-btn" type="button" class="unstage" aria-label="Unstage file">✕</button>
+          </div>
+        </div>
+
+        <div class="form-row" id="sample-row">
+          <label for="sample-select">Or choose a sample</label>
+          <select id="sample-select" name="sample" aria-label="Sample CSV">
+            <option value="">-- none --</option>
+            {% for s in samples %}
+            <option value="{{s}}">{{s}}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-row actions">
+          <button type="submit" id="upload-submit">Upload / Use Sample</button>
+        </div>
+      </form>
+
+      <hr />
+      <p>After upload you will be taken to a preview page where you can inspect cleaned rows, then process and download a cleaned CSV.</p>
+      <p>Note: This prototype only runs local cleaning and preserves MB IDs if present. It does not call external APIs from the UI by default.</p>
+    </div>
+  </body>
+  <script>
+    // UI behavior for file staging, sample hiding, and submit text updates
+    (function(){
+      const fileInput = document.getElementById('file-input');
+      const sampleRow = document.getElementById('sample-row');
+      const sampleSelect = document.getElementById('sample-select');
+      const staged = document.getElementById('staged-file');
+      const stagedName = document.getElementById('staged-name');
+      const unstageBtn = document.getElementById('unstage-btn');
+      const submitBtn = document.getElementById('upload-submit');
+
+      // Initialize state: ensure staged UI hidden and unstage button hidden
+      if (staged) staged.style.display = 'none';
+      if (unstageBtn) unstageBtn.style.display = 'none';
+
+      function resetToDefault() {
+        // clear file input
+        try { fileInput.value = ''; } catch(e) {}
+        if (staged) staged.style.display = 'none';
+        if (unstageBtn) unstageBtn.style.display = 'none';
+        stagedName.textContent = '';
+        // show sample select and enable file input
+        if (sampleRow) sampleRow.style.display = '';
+        try { fileInput.removeAttribute('disabled'); } catch(e) {}
+        // update submit
+        submitBtn.textContent = 'Upload / Use Sample';
+      }
+
+      // When a file is chosen, show staged UI and hide samples
+      fileInput.addEventListener('change', function(ev){
+        const f = fileInput.files && fileInput.files[0];
+        if (!f) {
+          resetToDefault();
+          return;
+        }
+        if (staged) staged.style.display = 'inline-flex';
+        if (unstageBtn) unstageBtn.style.display = 'inline-block';
+        stagedName.textContent = f.name;
+        if (sampleRow) sampleRow.style.display = 'none';
+        submitBtn.textContent = `Use uploaded file: ${f.name}`;
+      });
+
+      // Unstage button clears file selection and restores sample select
+      unstageBtn.addEventListener('click', function(){
+        resetToDefault();
+      });
+
+      // If a sample is selected, update submit button text accordingly and disable file input
+      if (sampleSelect) {
+        // initialize based on current selection
+        if (sampleSelect.value) {
+          submitBtn.textContent = `Use sample: ${sampleSelect.value}`;
+          try { fileInput.setAttribute('disabled', 'disabled'); } catch(e) {}
+        }
+
+        sampleSelect.addEventListener('change', function(){
+          const v = sampleSelect.value;
+          if (v) {
+            submitBtn.textContent = `Use sample: ${v}`;
+            // visually disable file input to avoid confusion
+            try { fileInput.setAttribute('disabled', 'disabled'); } catch(e) {}
+            // hide staged UI if any
+            if (staged) staged.style.display = 'none';
+            if (unstageBtn) unstageBtn.style.display = 'none';
+          } else {
+            submitBtn.textContent = 'Upload / Use Sample';
+            try { fileInput.removeAttribute('disabled'); } catch(e) {}
+          }
+        });
+      }
+
+    })();
+  </script>
+</html>
