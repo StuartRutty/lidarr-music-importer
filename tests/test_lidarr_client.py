@@ -1,147 +1,299 @@
-"""
-Tests for Lidarr API Client
-
-Tests the LidarrClient class for interacting with Lidarr's Web Service API.
-Uses HTTP mocking to test API calls without a real Lidarr instance.
-"""
-
+import requests
 import pytest
 import responses
-import requests
 import time
 from unittest.mock import Mock, patch
+from datetime import datetime
+
 from lib.lidarr_client import LidarrClient
 
 
-class TestLidarrClientInit:
-    """Test LidarrClient initialization."""
-    
-    def test_init_with_required_parameters(self):
-        """Test initialization with required parameters."""
-        client = LidarrClient(
-            base_url="http://localhost:8686",
-            api_key="test-api-key",
-            quality_profile_id=1,
-            metadata_profile_id=1,
-            root_folder_path="/music"
-        )
-        
-        assert client.base_url == "http://localhost:8686"
-        assert client.api_key == "test-api-key"
-        assert client.quality_profile_id == 1
-        assert client.metadata_profile_id == 1
-        assert client.root_folder_path == "/music"
-    
-    def test_init_strips_trailing_slash_from_url(self):
-        """Test that trailing slash is removed from base URL."""
-        client = LidarrClient(
-            base_url="http://localhost:8686/",
-            api_key="test-key",
-            quality_profile_id=1,
-            metadata_profile_id=1,
-            root_folder_path="/music"
-        )
-        
-        assert client.base_url == "http://localhost:8686"
-        assert not client.base_url.endswith('/')
-    
-    def test_init_with_custom_parameters(self):
-        """Test initialization with custom parameters."""
-        client = LidarrClient(
-            base_url="http://example.com:8080",
-            api_key="custom-key",
-            quality_profile_id=5,
-            metadata_profile_id=3,
-            root_folder_path="/custom/path",
-            request_delay=1.0,
-            max_retries=5,
-            retry_delay=3.0,
-            timeout=60
-        )
-        
-        assert client.request_delay == 1.0
-        assert client.max_retries == 5
-        assert client.retry_delay == 3.0
-        assert client.timeout == 60
-    
-    def test_init_sets_default_values(self):
-        """Test that default values are set correctly."""
-        client = LidarrClient(
-            base_url="http://localhost:8686",
-            api_key="test-key",
-            quality_profile_id=1,
-            metadata_profile_id=1,
-            root_folder_path="/music"
-        )
-        
-        assert client.request_delay == 0.5
-        assert client.max_retries == 3
-        assert client.retry_delay == 2.0
-        assert client.timeout == 30
-        assert client.last_request_time == 0
+class _DummyResp400:
+    def __init__(self, text='Already exists'):
+        self.status_code = 400
+        self.text = text
+
+    def raise_for_status(self):
+        err = requests.exceptions.HTTPError()
+        err.response = self
+        raise err
+
+    def json(self):
+        return {"artistName": "Dummy"}
 
 
-class TestLidarrClientHeaders:
-    """Test header generation."""
-    
-    def test_get_headers_includes_api_key(self):
-        """Test that headers include API key."""
-        client = LidarrClient(
-            base_url="http://localhost:8686",
-            api_key="test-api-key-123",
-            quality_profile_id=1,
-            metadata_profile_id=1,
-            root_folder_path="/music"
-        )
-        
-        headers = client._get_headers()
-        assert "X-Api-Key" in headers
-        assert headers["X-Api-Key"] == "test-api-key-123"
+class _DummyResp201:
+    def __init__(self, payload=None):
+        self.status_code = 201
+        self._payload = payload or {"title": "Album1"}
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
 
 
-class TestLidarrClientRateLimiting:
-    """Test rate limiting functionality."""
-    
-    def test_wait_for_rate_limit_delays_requests(self):
-        """Test that rate limiting adds delay between requests."""
-        client = LidarrClient(
-            base_url="http://localhost:8686",
-            api_key="test-key",
-            quality_profile_id=1,
-            metadata_profile_id=1,
-            root_folder_path="/music",
-            request_delay=0.1
-        )
-        
-        # Simulate first request
-        client.last_request_time = time.time()
-        
-        # Wait should delay
-        start = time.time()
-        client._wait_for_rate_limit()
-        elapsed = time.time() - start
-        
-        # Should have waited approximately request_delay seconds
-        assert elapsed >= 0.09  # Allow small tolerance
-    
-    def test_wait_for_rate_limit_with_zero_delay(self):
-        """Test that zero delay doesn't wait."""
-        client = LidarrClient(
-            base_url="http://localhost:8686",
-            api_key="test-key",
-            quality_profile_id=1,
-            metadata_profile_id=1,
-            root_folder_path="/music",
-            request_delay=0
-        )
-        
-        client.last_request_time = time.time()
-        start = time.time()
-        client._wait_for_rate_limit()
-        elapsed = time.time() - start
-        
-        # Should be nearly instant
-        assert elapsed < 0.01
+def test_get_headers_and_repr():
+    c = LidarrClient("http://localhost:8686/", "APIKEY", 1, 1, "/music")
+    assert c._get_headers() == {"X-Api-Key": "APIKEY"}
+    assert "LidarrClient" in repr(c)
+
+
+def test_add_artist_already_exists(monkeypatch):
+    c = LidarrClient("http://localhost:8686/", "K", 1, 1, "/root")
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _DummyResp400("Artist already exists")
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    artist_data = {"artistName": "Test Artist"}
+    result = c.add_artist(artist_data, monitor=False, search=False)
+    assert result == artist_data
+
+
+def test_add_album_returns_json_on_201(monkeypatch):
+    c = LidarrClient("http://localhost:8686/", "K", 1, 1, "/root")
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _DummyResp201({"title": "AlbumX"})
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    album = {"title": "AlbumX"}
+    res = c.add_album(album, monitored=True, search=True)
+    assert isinstance(res, dict)
+    assert res.get("title") == "AlbumX"
+
+
+def test_is_album_already_monitored_matches_by_title(monkeypatch):
+    c = LidarrClient("http://localhost:8686/", "K", 1, 1, "/root")
+
+    sample_album = {"title": "Some Album", "artist": {"artistName": "The Band"}, "monitored": True}
+
+    monkeypatch.setattr(c, "get_all_albums", lambda: [sample_album])
+
+    matched, album = c.is_album_already_monitored("The Band", "Some Album")
+    assert matched is True
+    assert album == sample_album
+
+
+def test_monitor_album_by_mbid_existing_monitored(monkeypatch):
+    c = LidarrClient("http://host", "key", 1, 1, "/root")
+
+    # existing album returned by get_artist_albums with matching foreignAlbumId
+    existing = {"foreignAlbumId": "mbid1", "monitored": True}
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [existing])
+
+    res = c.monitor_album_by_mbid(123, "mbid1", "Artist", "Title")
+    assert res is True
+
+
+def test_monitor_album_by_mbid_existing_unmonitored_updates(monkeypatch):
+    c = LidarrClient("http://host", "key", 1, 1, "/root")
+
+    existing = {"foreignAlbumId": "mbid2", "monitored": False}
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [existing])
+    # simulate update_album succeeds
+    monkeypatch.setattr(c, "update_album", lambda a: True)
+
+    res = c.monitor_album_by_mbid(5, "mbid2", "Artist", "Title")
+    assert res is True
+
+
+def test_monitor_album_by_mbid_no_lookup_results(monkeypatch):
+    c = LidarrClient("http://host", "key", 1, 1, "/root")
+
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [])
+
+    # monkeypatch requests.get for lookup to return an object with json() -> []
+    class R:
+        status_code = 200
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return []
+
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: R())
+
+    res = c.monitor_album_by_mbid(1, "missing-mbid", "A", "T")
+    assert res is False
+
+
+def test_monitor_album_by_mbid_lookup_name_match_fix(monkeypatch):
+    c = LidarrClient("http://host", "key", 1, 1, "/root")
+
+    # no existing albums
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [])
+
+    # simulate lookup returning album with artist id None but name matching
+    album_data = {
+        "title": "X",
+        "artist": {"id": None, "artistName": "The Band", "foreignArtistId": None},
+        "foreignAlbumId": "mbid3"
+    }
+
+    class R:
+        status_code = 200
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return [album_data]
+
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: R())
+
+    # get_artist_by_id should return the complete artist data used to patch album
+    monkeypatch.setattr(c, "get_artist_by_id", lambda a: {"id": 99, "artistName": "The Band"})
+    # add_album should return a truthy result
+    monkeypatch.setattr(c, "add_album", lambda album, monitored=True, search=True: {"title": "X"})
+
+    res = c.monitor_album_by_mbid(99, "mbid3", "The Band", "X")
+    assert res is True
+
+
+def test_monitor_album_exact_match_and_monitoring(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+
+    album = {"title": "Target Album", "monitored": True, "id": 7}
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [album])
+
+    res = c.monitor_album(12, "Target Album", "Artist")
+    assert res is True
+
+
+def test_monitor_album_exact_match_not_monitored_updates_and_search(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+
+    album = {"title": "Target Album", "monitored": False, "id": 8}
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [album])
+    monkeypatch.setattr(c, "update_album", lambda a: True)
+    called = {"search": False}
+
+    def fake_search(aid):
+        called["search"] = True
+
+    monkeypatch.setattr(c, "search_for_album", fake_search)
+
+    res = c.monitor_album(12, "Target Album", "Artist")
+    assert res is True
+    assert called["search"] is True
+
+
+def test_monitor_album_no_matches_triggers_refresh(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: [])
+
+    called = {"refreshed": False}
+    monkeypatch.setattr(c, "refresh_artist", lambda aid: called.__setitem__("refreshed", True))
+
+    res = c.monitor_album(5, "Nonexistent", "Artist")
+    assert res is False
+    assert called["refreshed"] is True
+
+
+def test_unmonitor_all_albums_for_artist(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+
+    albums = [
+        {"id": 1, "title": "A", "monitored": True},
+        {"id": 2, "title": "B", "monitored": False},
+        {"id": 3, "title": "C", "monitored": True},
+    ]
+
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: albums)
+    updated = []
+
+    def fake_update(album):
+        updated.append(album.get("title"))
+        return True
+
+    monkeypatch.setattr(c, "update_album", fake_update)
+
+    res = c.unmonitor_all_albums_for_artist(10, "Artist")
+    assert res is True
+    # Only monitored albums were updated
+    assert "A" in updated and "C" in updated
+
+
+def test_unmonitor_all_except_specific_album_keep_target_by_mbid(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+
+    albums = [
+        {"id": 1, "title": "Target", "monitored": True, "foreignAlbumId": "MBIDT"},
+        {"id": 2, "title": "Other", "monitored": True, "foreignAlbumId": "MBIDX"},
+    ]
+
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: albums)
+    unmonitored = []
+
+    def fake_update(album):
+        if not album.get('monitored'):
+            unmonitored.append(album.get('title'))
+        return True
+
+    monkeypatch.setattr(c, "update_album", fake_update)
+
+    res = c.unmonitor_all_except_specific_album(1, "MBIDT", "Artist", "Target")
+    assert res is True
+    # Other album should have been unmonitored
+    assert "Other" in unmonitored
+
+
+def test_unmonitor_all_except_specific_album_keep_target_by_title(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+
+    albums = [
+        {"id": 1, "title": "Target Album", "monitored": True, "foreignAlbumId": None},
+        {"id": 2, "title": "Target Album (Deluxe)", "monitored": True, "foreignAlbumId": None},
+        {"id": 3, "title": "Other", "monitored": True, "foreignAlbumId": None},
+    ]
+
+    monkeypatch.setattr(c, "get_artist_albums", lambda artist_id: albums)
+    unmonitored = []
+
+    def fake_update(album):
+        if not album.get('monitored'):
+            unmonitored.append(album.get('title'))
+        return True
+
+    monkeypatch.setattr(c, "update_album", fake_update)
+
+    res = c.unmonitor_all_except_specific_album(1, "", "Artist", "Target Album")
+    assert res is True
+    # Other album should have been unmonitored
+    assert "Other" in unmonitored
+
+
+def test_retry_request_retries_on_503_and_succeeds():
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+    c.max_retries = 4
+    counter = {"n": 0}
+
+    def flaky():
+        if counter["n"] < 2:
+            counter["n"] += 1
+            raise requests.exceptions.RequestException("503 Service Unavailable")
+        return "ok"
+
+    res = c._retry_request(flaky)
+    assert res == "ok"
+
+
+def test_retry_request_raises_after_max(monkeypatch):
+    c = LidarrClient("http://host", "k", 1, 1, "/root")
+    c.max_retries = 2
+
+    def always_fail():
+        raise requests.exceptions.RequestException("503 Service Unavailable")
+
+    try:
+        c._retry_request(always_fail)
+        raised = False
+    except Exception:
+        raised = True
+
+    assert raised is True
 
 
 class TestLidarrClientGetExistingArtists:

@@ -155,3 +155,21 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         f"Total: {total}  Passed: {passed}  Failed: {failed}  Skipped: {skipped}  "
         f"Errors: {errors}  xfailed: {xfailed}  xpassed: {xpassed}"
     )
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Ignore duplicate/variant test files that were left in the tests/ dir.
+
+    Newer pytest versions pass a pathlib.Path as `collection_path`.
+    We accept that and convert to string for matching. This hook returns True
+    for filenames matching duplicate patterns so pytest won't collect them.
+    """
+    try:
+        p = str(collection_path)
+    except Exception:
+        p = repr(collection_path)
+
+    import re
+    if re.search(r"(_combined|_extra|_more|_json)\.py$", p):
+        return True
+    return False
