@@ -73,17 +73,15 @@ def main():
     if not check_python_version():
         sys.exit(1)
     
-    # Install requirements
-    if not install_requirements():
-        sys.exit(1)
-    
-    # Test imports
-    if not test_imports():
-        print("\n❌ Package installation failed. Try installing manually:")
-        print("   pip install -r requirements.txt")
-        sys.exit(1)
-    
-    # Setup configuration
+    # NOTE: Do not attempt to install requirements automatically when this
+    # script is executed as part of a package build (pip / PEP 517). Installing
+    # dependencies from inside setup scripts can fail in isolated build
+    # environments where `pip` may not be available. Instead, instruct users
+    # and CI to install the requirements explicitly.
+    print("\n📦 Please install project requirements manually before running setup:")
+    print("   python -m pip install -r requirements.txt")
+
+    # Setup configuration (create config.py from template if missing)
     setup_config()
     
     print("\n" + "=" * 40)
