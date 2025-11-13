@@ -5,6 +5,9 @@ Provides common test data and mock objects for use across all test modules.
 """
 import pytest
 from pathlib import Path
+import os
+import shutil
+import webbrowser
 
 
 @pytest.fixture
@@ -173,3 +176,59 @@ def pytest_ignore_collect(collection_path, config):
     if re.search(r"(_combined|_extra|_more|_json)\.py$", p):
         return True
     return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_webui_dirs():
+    """Ensure `webui/uploads` and `webui/processed` are clean before and after tests.
+
+    This fixture runs automatically for the test session. It creates the directories
+    if missing and removes any files created during tests to avoid leaving artifacts
+    in the repository working tree.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    uploads_dir = repo_root / "webui" / "uploads"
+    processed_dir = repo_root / "webui" / "processed"
+    jobs_dir = repo_root / "webui" / "jobs"
+
+    def _ensure_and_clear(dirpath: Path):
+        if dirpath.exists():
+            for child in dirpath.iterdir():
+                try:
+                    if child.is_dir():
+                        shutil.rmtree(child)
+                    else:
+                        child.unlink()
+                except Exception:
+                    # Best-effort cleanup; tests should not fail due to cleanup errors
+                    pass
+        else:
+            dirpath.mkdir(parents=True, exist_ok=True)
+
+    # Clean before tests
+    _ensure_and_clear(uploads_dir)
+    _ensure_and_clear(processed_dir)
+    _ensure_and_clear(jobs_dir)
+
+    yield
+
+    # Clean after tests
+    _ensure_and_clear(uploads_dir)
+    _ensure_and_clear(processed_dir)
+    _ensure_and_clear(jobs_dir)
+
+
+@pytest.fixture(autouse=True)
+def no_external_opens(monkeypatch):
+    """Prevent tests from opening external applications or URLs.
+
+    Some environments (especially on Windows with certain editor integrations)
+    may react to attempts to open files/URLs by focusing the editor or starting
+    external programs. During tests we replace those calls with no-op functions.
+    """
+    # Patch webbrowser.open to a harmless no-op
+    monkeypatch.setattr(webbrowser, 'open', lambda *a, **k: None)
+
+    # Patch os.startfile on Windows if present
+    if hasattr(os, 'startfile'):
+        monkeypatch.setattr(os, 'startfile', lambda *a, **k: None)

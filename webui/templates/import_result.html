@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Import Dry-Run — Lidarr Importer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Import Dry-Run Results</h1>
+      <p class="muted">Review the actions below. This is a dry-run — no external requests were made.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Artist</th>
+            <th>Album</th>
+            <th>Cleaned Artist</th>
+            <th>Cleaned Album</th>
+            <th>MB Artist ID</th>
+            <th>MB Release ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.artist_raw }}</td>
+            <td>{{ r.album_raw }}</td>
+            <td>{{ r.artist_clean }}</td>
+            <td>{{ r.album_clean }}</td>
+            <td>{{ r.mb_artist_id }}</td>
+            <td>{{ r.mb_release_id }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="form-row actions">
+        <a class="button" href="/preview?path={{ filename }}">Back to preview</a>
+      </div>
+
+      <p class="spacer"><a href="/">Home</a></p>
+    </div>
+  </body>
+</html>

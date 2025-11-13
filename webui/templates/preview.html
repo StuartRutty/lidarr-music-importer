@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Preview — Lidarr Importer</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      .container { max-width: 1000px; margin: auto; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ddd; padding: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Preview</h1>
+      <form method="get" action="/preview" class="settings-form" aria-label="Preview settings">
+        <input type="hidden" name="path" value="{{ filename }}" />
+        <label>Rows to show: <input name="preview_rows" type="number" min="1" value="{{ preview_rows or 10 }}" /></label>
+        <label>Artist filter: <input name="artist_filter" type="text" value="{{ artist_filter or '' }}" placeholder="substring match" /></label>
+        <label>Album filter: <input name="album_filter" type="text" value="{{ album_filter or '' }}" placeholder="substring match" /></label>
+        <label><input type="checkbox" name="strip_suffixes" {% if strip_suffixes %}checked{% endif %} /> Strip common album suffixes</label>
+        <button type="submit">Apply</button>
+      </form>
+
+      <p class="muted">Showing first {{ preview|length }} of {{ filtered_total }} filtered rows ({{ total_all }} total)</p>
+
+      <form method="post" action="/import" aria-label="Import selected rows">
+        <input type="hidden" name="filename" value="{{ filename }}" />
+        <input type="hidden" name="preview_rows" value="{{ preview_rows or 10 }}" />
+        <input type="hidden" name="artist_filter" value="{{ artist_filter or '' }}" />
+        <input type="hidden" name="album_filter" value="{{ album_filter or '' }}" />
+        <input type="hidden" name="strip_suffixes" value="{% if strip_suffixes %}on{% endif %}" />
+        <table>
+          <thead>
+            <tr>
+              <th><input id="select-all" type="checkbox" aria-label="Select all rows" /></th>
+              <th>#</th>
+              <th>Raw Artist</th>
+              <th>Raw Album</th>
+              <th>Cleaned Artist</th>
+              <th>Cleaned Album</th>
+              <th>MB Artist ID</th>
+              <th>MB Release ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in preview %}
+            <tr>
+              <td><input class="row-checkbox" type="checkbox" name="selected" value="{{ loop.index0 }}" aria-label="Select row {{ loop.index }}" /></td>
+              <td>{{ loop.index }}</td>
+              <td>{{ row.raw_artist }}</td>
+              <td>{{ row.raw_album }}</td>
+              <td>{{ row.cleaned_artist }}</td>
+              <td>{{ row.cleaned_album }}</td>
+              <td>{{ row.mb_artist_id }}</td>
+              <td>{{ row.mb_release_id }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="form-row actions">
+          <button type="submit">Dry-run import selected rows</button>
+        </div>
+      </form>
+
+      <form method="post" action="/process">
+        <input type="hidden" name="filename" value="{{ filename }}" />
+        <input type="hidden" name="strip_suffixes" value="{% if strip_suffixes %}on{% endif %}" />
+        <div class="form-row">
+          <label>
+            <input type="checkbox" name="skip_risky" /> Skip risky entries (not implemented)
+          </label>
+        </div>
+        <div class="form-row actions">
+          <button type="submit">Process and Download Cleaned CSV</button>
+        </div>
+      </form>
+
+      <hr />
+      <h3>MusicBrainz enrichment</h3>
+      <form method="post" action="/enrich">
+        <input type="hidden" name="filename" value="{{ filename }}" />
+        <label for="mb_delay">Delay between MusicBrainz requests (seconds, min 1.0):</label>
+        <input id="mb_delay" name="mb_delay" type="number" step="0.1" value="2.0" min="1.0" />
+        <div class="form-row actions">
+          <button type="submit">Run MusicBrainz enrichment and download enriched CSV</button>
+        </div>
+      </form>
+
+      <div id="enrich-status" class="status-box hidden">
+        <strong>Enrichment status:</strong>
+        <div id="enrich-progress" class="muted">Queued</div>
+        <div id="enrich-current" class="small"></div>
+        <div id="enrich-link" class="spacer"></div>
+      </div>
+
+      <p class="spacer"><a href="/">Back</a></p>
+    </div>
+    <script>
+      // If the URL fragment contains #task=<id>, poll the server for status
+      function getTaskFromHash() {
+        const h = window.location.hash || '';
+        if (!h) return null;
+        const m = h.match(/task=([0-9a-fA-F-]+)/);
+        return m ? m[1] : null;
+      }
+
+      async function pollStatus(taskId) {
+        const statusBox = document.getElementById('enrich-status');
+        const progress = document.getElementById('enrich-progress');
+        const current = document.getElementById('enrich-current');
+        const link = document.getElementById('enrich-link');
+        statusBox.style.display = 'block';
+        try {
+          const res = await fetch(`/enrich_status?task_id=${taskId}`);
+          if (!res.ok) {
+            progress.textContent = 'Unknown task';
+            return;
+          }
+          const data = await res.json();
+          progress.textContent = `${data.status} (${data.processed || 0}/${data.total || 0})`;
+          current.textContent = data.current || '';
+          if (data.status === 'completed') {
+            link.innerHTML = `<a href="/download?path=${encodeURIComponent(data.out_name)}">Download enriched CSV</a>`;
+            return; // stop polling
+          } else if (data.status === 'failed') {
+            link.textContent = `Failed: ${data.error}`;
+            return;
+          }
+        } catch (err) {
+          progress.textContent = `Error polling status: ${err}`;
+        }
+        setTimeout(() => pollStatus(taskId), 1500);
+      }
+
+      const taskId = getTaskFromHash();
+      if (taskId) {
+        pollStatus(taskId);
+      }
+
+      // Select-all checkbox behavior
+      const selectAll = document.getElementById('select-all');
+      if (selectAll) {
+        selectAll.addEventListener('change', function() {
+          const checked = this.checked;
+          document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = checked);
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+/* Shared styles for webui */
+:root{
+  --max-width: 1000px;
+  --gap: 12px;
+  --muted: #666;
+  --border: #e6e6e6;
+}
+body{font-family:Segoe UI, Roboto, Arial, sans-serif; margin:20px; color:#111}
+.container{max-width:var(--max-width);margin:0 auto;padding:8px}
+.form-row{margin-bottom:var(--gap)}
+label{display:block;margin-bottom:6px;font-weight:600}
+input[type=file],select,input[type=number],button{font-size:14px}
+button{background:#0b5cff;color:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer}
+button[disabled]{opacity:0.6;cursor:not-allowed}
+table{border-collapse:collapse;width:100%;margin-top:8px}
+th,td{border:1px solid var(--border);padding:8px;text-align:left}
+th{background:#fafafa}
+.muted{color:var(--muted)}
+.status-box{margin-top:16px;padding:10px;border:1px solid var(--border);background:#fff}
+.hidden{display:none}
+.spacer{height:var(--gap)}
+.actions{display:flex;gap:8px;align-items:center}
+.small{font-size:0.9em}
+
+/* Disabled input visuals */
+input[disabled], select[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Staged file UI */
+.staged{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fbfbff}
+.staged-name{font-weight:600;color:#0b3ac6}
+.unstage{background:transparent;border:none;color:#999;font-size:16px;line-height:1;cursor:pointer;padding:4px;border-radius:4px}
+.unstage:hover{background:#f2f2f2;color:#333}
+
+/* Make forms a bit more compact on small screens */
+@media (max-width:600px){
+  .container{padding:6px}
+  button{width:100%}
+  .actions{flex-direction:column;align-items:stretch}
+}

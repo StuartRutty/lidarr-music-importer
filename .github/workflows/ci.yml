@@ -11,14 +11,14 @@ on:
 
 jobs:
   full_tests:
-    # Full install & test matrix for PRs and scheduled runs
-    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    # Full install & test matrix for PRs and pushes (and scheduled runs)
+    runs-on: ${{ matrix.os }}
     env:
       PYTHONPATH: ${{ github.workspace }}
     strategy:
       matrix:
-        python-version: ['3.10', '3.11']
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.10', '3.11', '3.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +27,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
       - name: Ensure pip installed
         run: |
@@ -36,7 +37,7 @@ jobs:
             curl -sS https://bootstrap.pypa.io/get-pip.py | python -
           fi
 
-      - name: Cache pip
+      - name: Cache pip (explicit)
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
