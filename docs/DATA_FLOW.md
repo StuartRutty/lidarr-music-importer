@@ -226,16 +226,18 @@ ERROR: MusicBrainz request failed: Connection aborted
 **This is normal!** MusicBrainz rate limits aggressively.
 
 **Solutions:**
-- Increase `MUSICBRAINZ_DELAY` in config
-- Use `--batch-pause` for longer breaks
+- Increase `MUSICBRAINZ_DELAY` in `config.py` or pass `--mb-delay` to `scripts/universal_parser.py` when running enrichment (minimum 1.0s enforced).
+- Adjust `BATCH_PAUSE` in `config.py` to increase pause duration between batches, or disable pauses from the CLI with `--no-batch-pause` (the add script also accepts `--batch-size`).
 - Run overnight for large imports
 
 ## Next Steps
 
 1. **Run your import:**
    ```bash
-   py -3 add_albums_to_lidarr.py albums.csv
+   py -3 scripts/add_albums_to_lidarr.py albums.csv
    ```
+
+   Note: `scripts/add_albums_to_lidarr.py` expects an enriched CSV (with `mb_artist_id` / `mb_release_id`) produced by `scripts/universal_parser.py` with MusicBrainz enrichment enabled. To control MusicBrainz spacing use `--mb-delay` (min 1.0s).
 
 2. **Monitor the logs:** Watch for 🔍📝✅ indicators
 

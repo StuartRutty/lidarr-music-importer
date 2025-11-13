@@ -22,3 +22,25 @@ Troubleshooting
 - If tests don't discover, confirm the Python interpreter selected at the bottom-right of VS Code.
 - If you use a virtualenv, activate it and reinstall requirements.
 - On Windows use `py -3 -m pytest ...` to ensure the correct Python is used.
+
+Test wrappers
+
+- Windows wrappers: the repository includes `run-tests.cmd` and `run-tests.ps1` at the project root as a canonical, cross-developer way to run the test suite on Windows.
+
+   - CMD (recommended for cmd.exe):
+
+      ```powershell
+      run-tests.cmd
+      # pass pytest args:
+      run-tests.cmd -k webui
+      ```
+
+   - PowerShell:
+
+      ```powershell
+      .\run-tests.ps1 -- -k webui
+      ```
+
+   These wrappers forward any arguments to `pytest` and propagate pytest's exit code so they are suitable for CI or local use.
+
+- VS Code task: there is also a `pytest: all` task in `.vscode/tasks.json` configured to run tests without stealing focus. Use the VS Code "Run Task..." UI to run that task if you prefer an IDE-integrated run.
