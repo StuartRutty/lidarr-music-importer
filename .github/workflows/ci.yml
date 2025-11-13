@@ -8,10 +8,13 @@ on:
   schedule:
     # run a full matrix weekly to catch dependency drift
     - cron: '0 3 * * 1' # weekly on Monday at 03:00 UTC
+  # Allow manual runs of the full matrix for maintenance
+  workflow_dispatch:
 
 jobs:
   full_tests:
-    # Full install & test matrix for PRs and pushes (and scheduled runs)
+    # Full install & test matrix — run only for PRs, scheduled runs, or manual dispatch
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     env:
       PYTHONPATH: ${{ github.workspace }}
